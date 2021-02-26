@@ -17,10 +17,6 @@ class BasebandWriterReq(addrBits: Int, beatBytes: Int) extends Bundle {
   val totalBytes = UInt(log2Ceil(beatBytes).W)
 }
 
-class BasebandWriterResp extends Bundle {
-  val success = Bool()
-}
-
 class BasebandReaderReq(addrBits: Int) extends Bundle {
   val addr = UInt(addrBits.W)
   val totalBytes = UInt(9.W)
@@ -32,7 +28,6 @@ class BasebandReaderResp extends Bundle {
 
 class BasebandDMAWriteIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
   val req = Decoupled(new BasebandWriterReq(addrBits, beatBytes))
-  val resp = Flipped(Decoupled())
 }
 
 class BasebandDMAReadIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
@@ -62,10 +57,10 @@ class BasebandDMA(implicit p: Parameters) extends LazyModule {
       val busy = Output(Bool())
     })
 
-    val readDataQ = Queue(reader.module.io.queue)
-    val writeQ = Queue(io.write.req)
+    val readQ = Queue(reader.module.io.queue) // Queue of read data
+    val writeQ = Queue(io.write.req) // Queue of write requests
 
-    io.read.queue <> readDataQ
+    io.read.queue <> readQ
     writer.module.io.req <> writeQ
 
     io.busy := writer.module.io.busy | reader.module.io.busy
@@ -148,7 +143,7 @@ class BasebandReader(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
 
     val io = IO(new Bundle {
       val req = Flipped(Decoupled(new BasebandReaderReq(addrBits)))
-      val resp = Decoupled(new BasebandWriterResp)
+      val resp = Decoupled(new BasebandReaderResp)
       val queue = Decoupled(UInt((beatBytes * 8).W))
       val busy = Bool()
     })
@@ -183,6 +178,8 @@ class BasebandReader(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
     }
 
     io.req.ready := state === s_idle | state === s_done
+    io.resp.valid := state === s_done
+    io.resp.bits.bytesRead := bytesRead
     io.queue.valid := state === s_queue
     io.busy := ~io.req.ready
 
