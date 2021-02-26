@@ -4,7 +4,7 @@ import chisel3._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.tile._
 
-class BLEBasebandModem(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opcodes = opcodes, nPTWPorts = 0) {
+class BLEBasebandModem(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyRoCC(opcodes = opcodes) {
   val dma = new BasebandDMA
 
   override lazy val module = new BLEBasebandModemImp(this)
@@ -12,5 +12,6 @@ class BLEBasebandModem(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyR
 }
 
 class BLEBasebandModemImp(outer: BLEBasebandModem) extends LazyRoCCModuleImp(outer) with HasCoreParameters {
-
+  // TODO: everything
 }
+

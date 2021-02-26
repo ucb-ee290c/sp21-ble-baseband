@@ -6,76 +6,74 @@ import chisel3.experimental._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp}
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
-import freechips.rocketchip.subsystem.CacheBlockBytes
-import freechips.rocketchip.tile.{CoreBundle, HasCoreParameters}
+import freechips.rocketchip.subsystem.{CacheBlockBytes, SystemBusKey}
+import freechips.rocketchip.tile.{CoreBundle, HasCoreParameters, XLen}
 import freechips.rocketchip.tilelink.{TLIdentityNode, TLXbar}
 import testchipip.TLHelper
 
-class BasebandDMAReadReq extends Bundle {
-  val memAddr = UInt(32.W) // 32-bit address space
-  val localAddr = UInt() // TODO: Determine internal capacity
-  val bytes = UInt(9.W) // 2-258 bytes
-}
-
-class BasebandDMAReadResp extends Bundle {
-  val bytesRead = UInt(9.W) // 2-258 bytes
-}
-
-class BasebandDMAWriteReq extends Bundle {
-  val addr = UInt(32.W) // 32-bit address space
-}
-
-class BasebandDMAWriteResp extends Bundle {
-  val success = Bool()
-}
-
-class BasebandDMAReadIO()(implicit p: Parameters) extends CoreBundle {
-  val req = Decoupled(new BasebandDMAReadReq)
-  val resp = Flipped(Decoupled())
-}
-
-class BasebandDMAWriteIO(implicit p: Parameters) extends CoreBundle {
-  val req = Decoupled()
-  val resp = Flipped(Decoupled())
-}
-
-class BasebandDMA(implicit p: Parameters) extends LazyModule {
-  val id_node = TLIdentityNode()
-  val xbar_node = TLXbar()
-
-  val blockBytes = p(CacheBlockBytes)
-
-  val reader = LazyModule(new BasebandReader(blockBytes))
-  val writer = LazyModule(new BasebandWriter(blockBytes))
-
-  xbar_node := writer.node
-  xbar_node := reader.node
-  id_node := xbar_node
-
-
-
-  lazy val module = new LazyModuleImp(this) with HasCoreParameters {
-    val io = IO(new Bundle {
-      val dma = new Bundle {
-        val read = Flipped(new BasebandDMAReadIO)
-        val write = new BasebandDMAWriteIO
-      }
-      val busy = Output(Bool())
-    })
-  }
-
-}
-
-class BasebandWriterReq(addrBits: Int) extends Bundle {
+class BasebandWriterReq(addrBits: Int, beatBytes: Int) extends Bundle {
   val addr = UInt(addrBits.W)
-  val totalBytes = UInt(9.W)
+  val data = UInt((beatBytes * 8).W)
+  val totalBytes = UInt(log2Ceil(beatBytes).W)
 }
 
 class BasebandWriterResp extends Bundle {
   val success = Bool()
 }
 
-class BasebandWriter(blockBytes: Int)(implicit p: Parameters) extends LazyModule {
+class BasebandReaderReq(addrBits: Int) extends Bundle {
+  val addr = UInt(addrBits.W)
+  val totalBytes = UInt(9.W)
+}
+
+class BasebandReaderResp extends Bundle {
+  val bytesRead = UInt(9.W)
+}
+
+class BasebandDMAWriteIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
+  val req = Decoupled(new BasebandWriterReq(addrBits, beatBytes))
+  val resp = Flipped(Decoupled())
+}
+
+class BasebandDMAReadIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
+  val req = Flipped(Decoupled(new BasebandReaderReq(addrBits)))
+  val resp = Decoupled(new BasebandReaderResp)
+  val queue = Decoupled(UInt((beatBytes * 8).W))
+}
+
+
+class BasebandDMA(implicit p: Parameters) extends LazyModule {
+  val id_node = TLIdentityNode()
+  val xbar_node = TLXbar()
+
+  val beatBytes = p(SystemBusKey).beatBytes
+
+  val reader = LazyModule(new BasebandReader(beatBytes))
+  val writer = LazyModule(new BasebandWriter(beatBytes))
+
+  xbar_node := writer.node
+  xbar_node := reader.node
+  id_node := xbar_node
+
+  lazy val module = new LazyModuleImp(this) with HasCoreParameters {
+    val io = IO(new Bundle {
+      val read = new BasebandDMAReadIO(reader.module.addrBits, beatBytes)
+      val write = new BasebandDMAWriteIO(writer.module.addrBits, beatBytes)
+      val busy = Output(Bool())
+    })
+
+    val readDataQ = Queue(reader.module.io.queue)
+    val writeQ = Queue(io.write.req)
+
+    io.read.queue <> readDataQ
+    writer.module.io.req <> writeQ
+
+    io.busy := writer.module.io.busy | reader.module.io.busy
+  }
+
+}
+
+class BasebandWriter(beatBytes: Int)(implicit p: Parameters) extends LazyModule {
   val node = TLHelper.makeClientNode(
     name = "baseband-writer",
     sourceId = IdRange(0, 1)
@@ -83,42 +81,43 @@ class BasebandWriter(blockBytes: Int)(implicit p: Parameters) extends LazyModule
 
   lazy val module = new LazyModuleImp(this) with HasCoreParameters with MemoryOpConstants {
     val (mem, edge) = node.out(0)
+
     val addrBits = edge.bundle.addressBits
 
     val io = IO(new Bundle {
-      val req = Flipped(Decoupled(new BasebandWriterReq(addrBits)))
-      val resp = Decoupled(new BasebandWriterResp)
+      val req = Flipped(Decoupled(new BasebandWriterReq(addrBits, beatBytes)))
+      val busy = Bool()
     })
 
-    val req = Reg(new BasebandWriterReq(addrBits))
+    val req = Reg(new BasebandWriterReq(addrBits, beatBytes))
 
-    val s_idle :: s_write :: s_resp :: s_done :: Nil = Enum(4)
+    val s_idle :: s_queue :: s_write :: s_resp :: s_done :: Nil = Enum(4)
     val state = RegInit(s_idle)
 
-    val bytesSent = Reg(UInt(9.W))
+    val bytesSent = Reg(UInt(log2Ceil(beatBytes).W))
     val bytesLeft = req.totalBytes - bytesSent
 
     val put = edge.Put(
-      fromSource = 0.U, // TODO: What is our source ID? Set Data
+      fromSource = 0.U, // TODO: verify
       toAddress = req.addr,
-      lgSize = log2Ceil(blockBytes).U,
-      data = 0.U)._2
+      lgSize = log2Ceil(beatBytes).U,
+      data = req.data)._2 // TODO: comes from queue
 
     val putPartial = edge.Put(
-      fromSource = 0.U, // TODO: What is our source ID? Set Data and Mask
+      fromSource = 0.U,
       toAddress = req.addr,
-      lgSize = log2Ceil(blockBytes).U,
-      data = 0.U,
+      lgSize = log2Ceil(beatBytes).U,
+      data = req.data,
       mask = 0.U)._2
 
     mem.a.valid := state === s_write
-    mem.a.bits := Mux(bytesLeft < blockBytes.U, put, putPartial)
+    mem.a.bits := Mux(bytesLeft < beatBytes.U, put, putPartial)
 
     mem.d.ready := state === s_resp
 
     when (edge.done(mem.a)) {
-      req.addr := req.addr + blockBytes.U
-      bytesSent := bytesSent + blockBytes.U
+      req.addr := req.addr + beatBytes.U
+      bytesSent := bytesSent + beatBytes.U // TODO: update for put partial
       state := s_resp
     }
 
@@ -127,9 +126,7 @@ class BasebandWriter(blockBytes: Int)(implicit p: Parameters) extends LazyModule
     }
 
     io.req.ready := state === s_idle | state === s_done
-
-    io.resp.valid := state === s_done
-    io.resp.bits.success := state === s_done // TODO: Better way to track success based on d contents?
+    io.busy := ~io.req.ready
 
     when (io.req.fire()) {
       req := io.req.bits
@@ -139,16 +136,7 @@ class BasebandWriter(blockBytes: Int)(implicit p: Parameters) extends LazyModule
   }
 }
 
-class BasebandReaderReq(addrBits: Int) extends Bundle {
-  val addr = UInt(addrBits.W)
-  val totalBytes = UInt(9.W)
-}
-
-class BasebandReaderResp extends Bundle {
-  val success = Bool()
-}
-
-class BasebandReader(blockBytes: Int)(implicit p: Parameters) extends LazyModule {
+class BasebandReader(beatBytes: Int)(implicit p: Parameters) extends LazyModule {
   val node = TLHelper.makeClientNode(
     name = "baseband-reader",
     sourceId = IdRange(0, 1)
@@ -160,20 +148,47 @@ class BasebandReader(blockBytes: Int)(implicit p: Parameters) extends LazyModule
 
     val io = IO(new Bundle {
       val req = Flipped(Decoupled(new BasebandReaderReq(addrBits)))
-      val resp = Decoupled(new BasebandReaderResp)
+      val resp = Decoupled(new BasebandWriterResp)
+      val queue = Decoupled(UInt((beatBytes * 8).W))
+      val busy = Bool()
     })
 
     val req = Reg(new BasebandReaderReq(addrBits))
 
-    val get = edge.Get(
+    val s_idle :: s_read :: s_resp :: s_queue :: s_done :: Nil = Enum(5)
+    val state = RegInit(s_idle)
+
+    val bytesRead = Reg(UInt(9.W))
+    val bytesLeft = req.totalBytes - bytesRead
+
+
+    mem.a.bits := edge.Get(
       fromSource = 0.U, // TODO: see writer source comment
       toAddress = req.addr,
-      lgSize = 0.U)._2 // TODO: get size
+      lgSize = log2Ceil(beatBytes).U)._2 // Always get a full beatBytes bytes, even if not used in packet
 
-    mem.a.bits := get
+    when (edge.done(mem.a)) {
+      req.addr := req.addr + beatBytes.U
+      bytesRead := bytesRead + Mux(bytesLeft < beatBytes.U, bytesLeft, beatBytes.U)
+      state := s_resp
+    }
+
+    when (mem.d.fire()) {
+      io.queue.bits := mem.d.bits.data
+      state := s_queue
+    }
+
+    when (io.queue.fire()) {
+      state := Mux(bytesLeft === 0.U, s_done, s_read)
+    }
+
+    io.req.ready := state === s_idle | state === s_done
+    io.queue.valid := state === s_queue
+    io.busy := ~io.req.ready
 
     when (io.req.fire()) {
       req := io.req.bits
+      state := s_read
     }
   }
 }
