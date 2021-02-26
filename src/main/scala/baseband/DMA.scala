@@ -19,11 +19,11 @@ class BasebandWriterReq(addrBits: Int, beatBytes: Int) extends Bundle {
 
 class BasebandReaderReq(addrBits: Int) extends Bundle {
   val addr = UInt(addrBits.W)
-  val totalBytes = UInt(9.W)
+  val totalBytes = UInt(9.W) // TODO: Make this not a magic number and instead base on some maxReadSize = 258 bytes
 }
 
 class BasebandReaderResp extends Bundle {
-  val bytesRead = UInt(9.W)
+  val bytesRead = UInt(9.W) // TODO: See previous magic number comment
 }
 
 class BasebandDMAWriteIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
@@ -61,6 +61,10 @@ class BasebandDMA(implicit p: Parameters) extends LazyModule {
     val writeQ = Queue(io.write.req) // Queue of write requests
 
     io.read.queue <> readQ
+
+    reader.module.io.req <> io.read.req
+    reader.module.io.resp <> io.read.resp
+
     writer.module.io.req <> writeQ
 
     io.busy := writer.module.io.busy | reader.module.io.busy
@@ -89,21 +93,23 @@ class BasebandWriter(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
     val s_idle :: s_queue :: s_write :: s_resp :: s_done :: Nil = Enum(4)
     val state = RegInit(s_idle)
 
+    val mask = VecInit(Seq.tabulate(beatBytes)(i => ((1 << i) - 1).U ))
+
     val bytesSent = Reg(UInt(log2Ceil(beatBytes).W))
     val bytesLeft = req.totalBytes - bytesSent
 
     val put = edge.Put(
-      fromSource = 0.U, // TODO: verify
+      fromSource = 0.U, // TODO: Verify
       toAddress = req.addr,
       lgSize = log2Ceil(beatBytes).U,
-      data = req.data)._2 // TODO: comes from queue
+      data = req.data)._2
 
     val putPartial = edge.Put(
       fromSource = 0.U,
       toAddress = req.addr,
       lgSize = log2Ceil(beatBytes).U,
       data = req.data,
-      mask = 0.U)._2
+      mask = mask(bytesLeft))._2
 
     mem.a.valid := state === s_write
     mem.a.bits := Mux(bytesLeft < beatBytes.U, put, putPartial)
@@ -112,7 +118,7 @@ class BasebandWriter(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
 
     when (edge.done(mem.a)) {
       req.addr := req.addr + beatBytes.U
-      bytesSent := bytesSent + beatBytes.U // TODO: update for put partial
+      bytesSent := bytesSent + Mux(bytesLeft < beatBytes.U, bytesLeft, beatBytes.U)
       state := s_resp
     }
 
