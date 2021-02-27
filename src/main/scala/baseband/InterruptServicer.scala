@@ -1,10 +1,8 @@
 package baseband
 
 import chisel3._
-import chisel3.experimental._
 import chisel3.util.{Decoupled, Enum, Queue}
 import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import freechips.rocketchip.tile.{RoCCCommand, RoCCResponse, XLen}
 
 class InterruptServicer()(implicit p: Parameters) extends Module {
