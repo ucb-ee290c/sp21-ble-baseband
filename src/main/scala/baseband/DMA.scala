@@ -6,8 +6,8 @@ import chisel3.experimental._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp}
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
-import freechips.rocketchip.subsystem.{CacheBlockBytes, SystemBusKey}
-import freechips.rocketchip.tile.{CoreBundle, HasCoreParameters, XLen}
+import freechips.rocketchip.subsystem.{SystemBusKey}
+import freechips.rocketchip.tile.{CoreBundle, HasCoreParameters}
 import freechips.rocketchip.tilelink.{TLIdentityNode, TLXbar}
 import testchipip.TLHelper
 
@@ -90,7 +90,7 @@ class BasebandWriter(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
 
     val req = Reg(new BasebandWriterReq(addrBits, beatBytes))
 
-    val s_idle :: s_queue :: s_write :: s_resp :: s_done :: Nil = Enum(4)
+    val s_idle :: s_write :: s_resp :: s_done :: Nil = Enum(4)
     val state = RegInit(s_idle)
 
     val mask = VecInit(Seq.tabulate(beatBytes)(i => ((1 << i) - 1).U ))

@@ -1,5 +1,6 @@
 package baseband
 
+import Chisel.Queue
 import chisel3._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.tile._
@@ -12,6 +13,11 @@ class BLEBasebandModem(opcodes: OpcodeSet)(implicit p: Parameters) extends LazyR
 }
 
 class BLEBasebandModemImp(outer: BLEBasebandModem) extends LazyRoCCModuleImp(outer) with HasCoreParameters {
-  // TODO: everything
+  val interruptServicer = new InterruptServicer
+
+  interruptServicer.io.cmd.in <> io.cmd
+  io.resp <> interruptServicer.io.interrupt.resp
+
+  val cmdQueue = Queue(interruptServicer.io.cmd.out, 8) // TODO: should queue depth be a config?
 }
 
