@@ -6,16 +6,22 @@ import chisel3.experimental._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.tile.RoCCCommand
 
+class BasebandConstants extends Bundle {
+  val channelIndex = UInt(6.W)
+  val crcPreset = UInt(24.W)
+  val accessAddress = UInt(32.W)
+  val additionalFrameSpace = UInt(32.W)
+  val loopbackSelect = UInt(32.W)
+}
+
 class Controller(implicit p: Parameters) extends Module {
   val io = IO(new Bundle {
     val cmd = Flipped(Decoupled(new RoCCCommand))
+    val constants = Output(new BasebandConstants)
   })
 
-  val channelIndex = Reg(UInt(6.W))
-  val crcPreset = Reg(UInt(24.W))
-  val accessAddress = Reg(UInt(32.W))
-  val additionalFrameSpace = Reg(UInt(32.W))
-  val loopbackSelect = Reg(UInt(32.W))
+  val constants = Reg(new BasebandConstants)
+  io.constants := constants
 
   val s_idle :: s_working :: Nil = Enum(2)
   val state = RegInit(s_idle)
@@ -36,19 +42,19 @@ class Controller(implicit p: Parameters) extends Module {
         is (BasebandISA.CONFIG_CMD) {
           switch (cmd.inst.rs2) {
             is (BasebandISA.CONFIG_CRC_PRESET) {
-              crcPreset := cmd.rs1
+              constants.crcPreset := cmd.rs1
             }
             is (BasebandISA.CONFIG_ACCESS_ADDRESS) {
-              accessAddress := cmd.rs1
+              constants.accessAddress := cmd.rs1
             }
             is (BasebandISA.CONFIG_CHANNEL_INDEX) {
-              channelIndex := cmd.rs1
+              constants.channelIndex := cmd.rs1
             }
             is (BasebandISA.CONFIG_ADDITIONAL_FRAME_SPACE) {
-              additionalFrameSpace := cmd.rs1
+              constants.additionalFrameSpace := cmd.rs1
             }
             is (BasebandISA.CONFIG_LOOPBACK_SELECT) {
-              loopbackSelect := cmd.rs1
+              constants.loopbackSelect := cmd.rs1
             }
           }
         }
