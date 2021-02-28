@@ -26,22 +26,20 @@ class BasebandReaderResp extends Bundle {
   val bytesRead = UInt(9.W) // TODO: See previous magic number comment
 }
 
-class BasebandDMAWriteIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
+class BasebandDMAWriteIO(addrBits: Int, beatBytes: Int) extends Bundle {
   val req = Decoupled(new BasebandWriterReq(addrBits, beatBytes))
 }
 
-class BasebandDMAReadIO(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends CoreBundle {
+class BasebandDMAReadIO(addrBits: Int, beatBytes: Int) extends Bundle {
   val req = Flipped(Decoupled(new BasebandReaderReq(addrBits)))
   val resp = Decoupled(new BasebandReaderResp)
   val queue = Decoupled(UInt((beatBytes * 8).W))
 }
 
 
-class BasebandDMA(implicit p: Parameters) extends LazyModule {
+class BasebandDMA(beatBytes: Int)(implicit p: Parameters) extends LazyModule {
   val id_node = TLIdentityNode()
   val xbar_node = TLXbar()
-
-  val beatBytes = p(SystemBusKey).beatBytes
 
   val reader = LazyModule(new BasebandReader(beatBytes))
   val writer = LazyModule(new BasebandWriter(beatBytes))
@@ -52,8 +50,8 @@ class BasebandDMA(implicit p: Parameters) extends LazyModule {
 
   lazy val module = new LazyModuleImp(this) with HasCoreParameters {
     val io = IO(new Bundle {
-      val read = new BasebandDMAReadIO(reader.module.addrBits, beatBytes)
-      val write = new BasebandDMAWriteIO(writer.module.addrBits, beatBytes)
+      val read = new BasebandDMAReadIO(paddrBits, beatBytes)
+      val write = new BasebandDMAWriteIO(paddrBits, beatBytes)
       val busy = Output(Bool())
     })
 
@@ -81,14 +79,12 @@ class BasebandWriter(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
   lazy val module = new LazyModuleImp(this) with HasCoreParameters with MemoryOpConstants {
     val (mem, edge) = node.out(0)
 
-    val addrBits = edge.bundle.addressBits
-
     val io = IO(new Bundle {
-      val req = Flipped(Decoupled(new BasebandWriterReq(addrBits, beatBytes)))
+      val req = Flipped(Decoupled(new BasebandWriterReq(paddrBits, beatBytes)))
       val busy = Bool()
     })
 
-    val req = Reg(new BasebandWriterReq(addrBits, beatBytes))
+    val req = Reg(new BasebandWriterReq(paddrBits, beatBytes))
 
     val s_idle :: s_write :: s_resp :: s_done :: Nil = Enum(4)
     val state = RegInit(s_idle)
@@ -145,16 +141,15 @@ class BasebandReader(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
 
   lazy val module = new LazyModuleImp(this) with HasCoreParameters with MemoryOpConstants {
     val (mem, edge) = node.out(0)
-    val addrBits = edge.bundle.addressBits
 
     val io = IO(new Bundle {
-      val req = Flipped(Decoupled(new BasebandReaderReq(addrBits)))
+      val req = Flipped(Decoupled(new BasebandReaderReq(paddrBits)))
       val resp = Decoupled(new BasebandReaderResp)
       val queue = Decoupled(UInt((beatBytes * 8).W))
       val busy = Bool()
     })
 
-    val req = Reg(new BasebandReaderReq(addrBits))
+    val req = Reg(new BasebandReaderReq(paddrBits))
 
     val s_idle :: s_read :: s_resp :: s_queue :: s_done :: Nil = Enum(5)
     val state = RegInit(s_idle)
@@ -170,12 +165,12 @@ class BasebandReader(beatBytes: Int)(implicit p: Parameters) extends LazyModule 
 
     when (edge.done(mem.a)) {
       req.addr := req.addr + beatBytes.U
-      bytesRead := bytesRead + Mux(bytesLeft < beatBytes.U, bytesLeft, beatBytes.U)
+      bytesRead := bytesRead + Mux(bytesLeft < beatBytes.U, bytesLeft, beatBytes.U) // TODO: move down to mem.d.fire clause to allow for masking (?)
       state := s_resp
     }
 
     when (mem.d.fire()) {
-      io.queue.bits := mem.d.bits.data
+      io.queue.bits := mem.d.bits.data // TODO: mask off the unwanted bytes if bytesLeft < beatBytes.U using a mask vector and register
       state := s_queue
     }
 

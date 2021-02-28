@@ -6,16 +6,15 @@ import chisel3.util._
 import chisel3.experimental._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp, LazyModuleImpLike}
-import freechips.rocketchip.tile.RoCCCommand
+import freechips.rocketchip.tile.{HasCoreParameters, RoCCCommand}
 
-class Controller(readerAddrBits: Int, writerAddrBits: Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule {
+class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule with HasCoreParameters {
   lazy val module = new LazyModuleImp(this) {
     val io = IO(new Bundle {
       val cmd = Flipped(Decoupled(new RoCCCommand))
-      val baseband = new BasebandIO
+      val baseband = new BasebandIO(addrBits, beatBytes)
       val dma = new Bundle {
-        val read = Flipped(new BasebandDMAReadIO(readerAddrBits, beatBytes))
-        val write = Flipped(new BasebandDMAWriteIO(writerAddrBits, beatBytes))
+        val read = Decoupled(new BasebandReaderReq(addrBits)) // Controller only issues read requests, the baseband issues write requests
       }
     })
 
