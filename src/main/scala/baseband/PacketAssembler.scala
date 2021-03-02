@@ -9,23 +9,33 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem.BaseSubsystem
 
-class PAInputBundle extends Bundle {
-  val trigger = Bool()
-  val data = UInt(8.W)
-  //val crc_seed = Output(UInt(24.W))
-  //val white_seed = Output(UInt(7.W))
-
+// We trigger the PA by sending it the Access Address we wish to write a packet for and the length of the PDU body,
+// which is known from the RoCC command we are sent (R[rs2] - 2)
+class PAControlInputBundle extends Bundle {
+  val aa = UInt(32.W)
+  val pduLength = UInt(8.W)
 }
 
-class PAOutputBundle extends Bundle {
-  val data = UInt(1.W)
+class PAInputIO extends Bundle {
+  val control = Flipped(Decoupled(new PAControlInputBundle))
+  val data = Flipped(Decoupled(UInt(8.W)))
+}
+
+class PAControlOutputBundle extends Bundle {
+  val busy = Bool()
   val done = Bool()
+}
+
+class PAOutputIO extends Bundle {
+  val control = Output(new PAControlOutputBundle)
+  val data = Decoupled(UInt(1.W))
 }
 
 
 class PacketAssemblerIO extends Bundle {
-  val in = Flipped(Decoupled(new PAInputBundle))
-  val out = Decoupled(new PAOutputBundle)
+  val in = new PAInputIO
+  val out = new PAOutputIO
+  val constants = Input(new BasebandConstants)
 }
 
 class PacketAssembler extends Module {
@@ -57,155 +67,139 @@ class PacketAssembler extends Module {
 
   val io = IO(new PacketAssemblerIO)
 
-  //state parameter
+  // State
   val s_idle :: s_preamble :: s_aa :: s_pdu_header :: s_pdu_payload :: s_crc :: Nil = Enum(6)
   val state = RegInit(s_idle)
 
-  val counter = RegInit(0.U(8.W)) //counter for bytes in packet
-  val counter_byte = RegInit(0.U(3.W)) //counter for bits in bytes
+  // Internal Counters
+  val counter = RegInit(0.U(8.W)) // Counts bytes in a given message component
+  val counter_byte = RegInit(0.U(3.W)) // Counts bit place within a given byte
+  // TODO: Add another counter to interface with some arbitrary width interface in beatBytes bytes
 
+  // Data registers
+  val data = RegInit(0.U(8.W))
+  val aa = RegInit(0.U(32.W))
   val pdu_length = RegInit(0.U(8.W))
 
-  //Preamble
-  val preamble0 = "b10101010".U // flipped preamble; start with least significant bit
-  val preamble1 = "b01010101".U
+  // Preambles: Reversed since we read LSB to MSB
+  val preamble0 = Reverse("b01010101".U)
+  val preamble1 = Reverse("b10101010".U)
+  val preamble = Mux(aa(0), preamble1, preamble0)
 
-  //Handshake parameters
-  val in_ready = RegInit(false.B) // TODO: Why is there registering for the ready and valid signals?
-  val out_valid = RegInit(false.B)
-
-  //data registers
-  val data = RegInit(0.U(8.W))
-
-  //CRC
-  val crc_reset = io.in.bits.trigger && io.in.valid
+  // CRC
+  val crc_reset =  io.in.control.fire()
   val crc_data = Wire(UInt(1.W))
   val crc_valid = Wire(Bool())
   val crc_result = Wire(UInt(24.W))
-  val crc_seed = Wire(UInt(24.W))
+  val crc_seed = io.constants.crcSeed
 
-  //whitening
-  val white_reset = io.in.bits.trigger && io.in.valid
+  // Whitening
+  val white_reset = io.in.control.fire()
   val white_data = Wire(UInt(1.W))
   val white_valid = Wire(Bool())
   val white_result = Wire(UInt(1.W))
-  val white_seed = Wire(UInt(7.W))
+  val white_seed = io.constants.whiteningSeed
 
-  //hardcode seed initiation
-  crc_seed := "b010101010101010101010101".U // TODO: This should be replaced with input controlled seeding
-  white_seed := "b1100101".U
+  // Handshake parameters
+  val data_in_ready = Wire(Bool())
+  val data_out_valid = Wire(Bool())
+  val data_out_fire = io.out.data.fire()
+  val data_in_fire = io.in.data.fire()
 
-  //decouple assignments
-  io.in.ready := in_ready
-  io.out.valid := out_valid
+  io.in.data.ready := data_in_ready
+  io.out.data.valid := data_out_valid
 
-  //output bits
+  // Input data bits
+  //io.in.data.ready :=
+
+  // Input control bits
+  io.in.control.ready := state === s_idle
+
+  // Output data
+  io.out.data.bits := Mux(state === s_pdu_header || state === s_pdu_payload || state === s_crc, white_result, data(counter_byte))
+
+  // Output control
+  io.out.control.busy := state =/= s_idle
+
+
+  // State Transition with counter updates
   when(state === s_idle) {
-    io.out.bits.data := 0.U
-  }.elsewhen(state === s_pdu_header || state === s_pdu_payload || state === s_crc) {
-    io.out.bits.data := white_result
-  }.otherwise {//PREAMBLE, s_aa
-    io.out.bits.data := data(counter_byte)
-  }
+    data_in_ready := false.B
+    data_out_valid := false.B
+    io.out.control.done := false.B
 
-  io.out.bits.done := state === s_crc && counter === 2.U && counter_byte === 7.U && io.out.fire() // End of packet
-
-  //State Transition with counter updates
-  when(state === s_idle) {
-    when(io.in.bits.trigger && io.in.valid) {
+    when(io.in.control.fire) {
       state := s_preamble
       counter := 0.U
       counter_byte := 0.U
-    }.otherwise {
-      state := s_idle
+      aa := io.in.control.bits.aa
+      pdu_length := io.in.control.bits.pduLength
+      data_out_valid := true.B // Out is valid in preamble and AA unconditionally (all data is present)
     }
   }.elsewhen(state === s_preamble) {
-    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_preamble, s_aa, 1.U, counter, counter_byte, io.out.fire())
+    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_preamble, s_aa, 1.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
   }.elsewhen(state === s_aa) {
-    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_aa, s_pdu_header, 4.U, counter, counter_byte, io.out.fire())
+    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_aa, s_pdu_header, 4.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
+
+    when (stateOut === s_pdu_header) {
+      data_in_ready := true.B // Start PDU header with an in ready (first time we need input data)
+      data_out_valid := false.B // Start PDU header with a out invalid (need to get input data first)
+    }
   }.elsewhen(state === s_pdu_header) {
-    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_pdu_header, s_pdu_payload, 2.U, counter, counter_byte, io.out.fire())
+    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_pdu_header, s_pdu_payload, 2.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
+
+    when(counter_byte === 7.U && data_out_fire) { // We have cleared the last output bit from this byte
+      data_in_ready := true.B
+      data_out_valid := false.B
+    }.elsewhen(data_in_fire) {
+      data_in_ready := false.B // We have received a new input byte
+      data_out_valid := true.B
+    }
   }.elsewhen(state === s_pdu_payload) {
-    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_pdu_payload, s_crc, pdu_length, counter, counter_byte, io.out.fire())
+    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_pdu_payload, s_crc, pdu_length, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
+
+    when (stateOut === s_crc) {
+      data_in_ready := false.B // Our next state is CRC, we do not need more data
+      data_out_valid := true.B // The output is fully present in CRC
+    }.elsewhen (counter_byte === 7.U && data_out_fire) { // We have cleared the last output bit from this byte
+      data_in_ready := true.B
+    }.elsewhen (data_in_fire) { // We have received a new input byte
+      data_in_ready := false.B
+    }
   }.elsewhen(state === s_crc) {
-    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_crc, s_idle, 3.U, counter, counter_byte, io.out.fire())
+    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_crc, s_idle, 3.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
+
+    when (stateOut === s_idle) {
+      io.out.control.done := true.B // We are done on our transition to idle
+      data_out_valid := false.B
+    }
   }.otherwise {
-    state := s_idle //error
-  }
-
-
-  //PDU_Length
-  when(state === s_pdu_header && counter === 1.U) {
-    pdu_length := data
-  }
-
-  //in_ready //note:check corner cases
-  when(state === s_aa || state === s_pdu_header || state === s_pdu_payload) {
-    when(state === s_pdu_payload && counter === pdu_length-1.U && counter_byte === 7.U && io.out.fire()) {
-      in_ready := false.B //special case at the end of PAYLOAD
-    }.elsewhen(counter_byte === 7.U && io.out.fire()) {
-      in_ready := true.B
-    }.elsewhen(io.in.fire()) {
-      in_ready := false.B
-    }
-  }.elsewhen(state === s_preamble && counter === 0.U && counter_byte === 7.U && io.out.fire()) {
-    in_ready := true.B//special case at the end of PREAMBLE: s_aa starts with ready
-  }.elsewhen(state === s_idle) {
-    in_ready := true.B
-  }.otherwise {
-    in_ready := false.B
-  }
-
-  //output valid
-  when(state === s_idle) {
-    out_valid := false.B
-  }.elsewhen(state === s_preamble) {
-    when(counter === 0.U && counter_byte === 7.U && io.out.fire()) {
-      out_valid := false.B//special case at the end of PREAMBLE: s_aa starts with invalid
-    }.elsewhen(io.in.valid) {
-      out_valid := true.B
-    }
-  }.elsewhen(state === s_crc) {
-    when(counter === 2.U && counter_byte === 7.U && io.out.fire()) {
-      out_valid := false.B//special case at the end of CRC
-    }.otherwise {
-      out_valid := true.B
-    }
-  }.otherwise {//s_aa, s_pdu_header, s_pdu_payload
-    when(counter_byte === 7.U && io.out.fire()) {
-      out_valid := false.B
-    }.elsewhen(io.in.fire()) {
-      out_valid := true.B
-    }
+    state := s_idle
   }
 
   //data
-  when(state === s_aa || state === s_pdu_header || state === s_pdu_payload) {
-    when(io.in.fire()) {
-      data := io.in.bits.data
-    }
-  }.elsewhen(state === s_preamble) {
-    when(io.in.valid) {
-      when(io.in.bits.data(0)) {
-        data := preamble1
-      }.otherwise {
-        data := preamble0
-      }
+  when(state === s_preamble) {
+      data := preamble
+  }.elsewhen(state === s_aa) {
+    data := aa
+  }.elsewhen(state === s_pdu_header || state === s_pdu_payload) {
+    when(data_in_fire) {
+      data := io.in.data.bits
     }
   }.elsewhen(state === s_crc) {
     when(counter === 0.U) {
@@ -214,17 +208,15 @@ class PacketAssembler extends Module {
       data := crc_result(15,8)
     }.elsewhen(counter === 2.U) {
       data := crc_result(23,16)
-    }.otherwise {
-      data := crc_result(7,0)//error
     }
-  }.otherwise {//IDLE
-    data := 0.U//or preserve
+  }.otherwise { // Idle
+    data := 0.U // TODO: Possibly can be eliminated
   }
 
   //Set CRC Parameters
   when(state === s_pdu_header || state === s_pdu_payload) {
     crc_data := data(counter_byte)
-    crc_valid := io.out.fire()
+    crc_valid := data_out_fire
   }.otherwise {
     crc_data := 0.U
     crc_valid := false.B
@@ -233,10 +225,10 @@ class PacketAssembler extends Module {
   //Set Whitening Parameters
   when(state === s_pdu_header || state === s_pdu_payload) {
     white_data  := data(counter_byte)
-    white_valid := io.out.fire()
+    white_valid := data_out_fire
   }.elsewhen(state === s_crc) {
-    white_data := crc_result(counter * 8.U + counter_byte)
-    white_valid := io.out.fire()
+    white_data := crc_result((counter << 3).asUInt() + counter_byte)
+    white_valid := data_out_fire
   }.otherwise {
     white_data := 0.U
     white_valid := false.B

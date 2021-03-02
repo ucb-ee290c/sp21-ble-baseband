@@ -5,9 +5,8 @@ import chisel3.util._
 import freechips.rocketchip.config.Parameters
 
 class AnalogRXIO extends Bundle {
-  val i = Input(5.W)
-  val q = Input(5.W)
-  val pllReady = Input(Bool)
+  val i = Input(UInt(5.W))
+  val q = Input(UInt(5.W))
 }
 
 class GFSKRX()(implicit p: Parameters) extends Module {

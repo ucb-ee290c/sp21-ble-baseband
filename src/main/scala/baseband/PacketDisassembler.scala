@@ -8,6 +8,8 @@ import chisel3.util._
 
 class PDAInputBundle extends Bundle {
   val switch = Bool()
+  // TODO: Rework logic for switch, and place it not inside one massive ready valid interface
+  //  ideally we will be able to switch the PD back into s_idle from s_preamble if preamble is not detected yet
   val data = UInt(1.W)
 }
 
@@ -16,12 +18,13 @@ class PDAOutputBundle extends Bundle {
   val length = UInt(8.W)
   val flag_aa = Bool()
   val flag_crc = Bool()
-  val done = Bool()
+  val done = Bool() // TODO: Remove done from the decoupled bundle / generally break this down
 }
 
 class PacketDisassemblerIO extends Bundle {
   val in = Flipped(Decoupled(new PDAInputBundle))
   val out = Decoupled(new PDAOutputBundle)
+  val busy = Output(Bool()) // TODO: Set this to be state =/= s_idle
 }
 
 class PacketDisassembler extends Module {
@@ -45,7 +48,7 @@ class PacketDisassembler extends Module {
   //Preamble
   val preamble0 = "b10101010".U
   val preamble1 = "b01010101".U
-  val preamble = Mux(reg_aa(0) === 0.U, preamble0, preamble1)
+  val preamble = Mux(reg_aa(0) === 0.U, preamble0, preamble1) // TODO: Do we want to let the Access Address be changed in configuration
 
   //Handshake Parameters
   val out_valid = RegInit(false.B) // TODO: Why are these registers?
@@ -84,12 +87,12 @@ class PacketDisassembler extends Module {
   io.out.valid := out_valid
   io.in.ready := in_ready
 
+  io.busy := state =/= s_idle
+
 
   when (state === s_idle) {
     when (io.in.bits.switch && io.in.valid) {//note: switch usage
       state := s_preamble
-    }.otherwise {
-      state := s_idle
     }
   }.elsewhen (state === s_preamble) {
     when (data.asUInt === preamble) {
@@ -104,14 +107,10 @@ class PacketDisassembler extends Module {
       counter_byte := 0.U
     }.otherwise {
       when (io.out.fire()) {
-        counter := counter+1.U
+        counter := counter + 1.U
       }
       when (io.in.fire()) {
-        when (counter_byte === 7.U) {
-          counter_byte := 0.U
-        }.otherwise {
-          counter_byte := counter_byte+1.U
-        }
+        counter_byte := Mux(counter_byte === 7.U, 0.U, counter_byte + 1.U)
       }
     }
   }.elsewhen (state === s_pdu_header) {
@@ -121,31 +120,23 @@ class PacketDisassembler extends Module {
       counter_byte := 0.U
     }.otherwise {
       when (io.out.fire()) {
-        counter := counter+1.U
+        counter := counter + 1.U
       }
       when (io.in.fire()) {
-        when (counter_byte === 7.U) {
-          counter_byte := 0.U
-        }.otherwise {
-          counter_byte := counter_byte+1.U
-        }
+        counter_byte := Mux(counter_byte === 7.U, 0.U, counter_byte + 1.U)
       }
     }
   }.elsewhen (state === s_pdu_payload) {
-    when (counter === length-1.U && io.out.fire()) {
+    when (counter === length - 1.U && io.out.fire()) {
       state := s_crc
       counter := 0.U
       counter_byte := 0.U
     }.otherwise {
       when (io.out.fire()) {
-        counter := counter+1.U
+        counter := counter + 1.U
       }
       when (io.in.fire()) {
-        when (counter_byte === 7.U) {
-          counter_byte := 0.U
-        }.otherwise {
-          counter_byte := counter_byte+1.U
-        }
+        counter_byte := Mux(counter_byte === 7.U, 0.U, counter_byte + 1.U)
       }
     }
   }.elsewhen (state === s_crc) {
@@ -243,7 +234,9 @@ class PacketDisassembler extends Module {
 
   //AFIFO_Ready_w//note:check corner cases
   when (state === s_idle) {
-    in_ready := false.B
+    in_ready := false.B // TODO: this is their hack to account for the fact that "switch" in included in the decoupled
+                        //  bundle, they turn ready off so they know they don't get data from a queue and then check
+                        //  switch and valid
   }.elsewhen (state === s_preamble) {
     in_ready := true.B
   }.elsewhen (counter_byte === 7.U && io.in.fire()) { //aa, pdu_header, pdu_payload, crc

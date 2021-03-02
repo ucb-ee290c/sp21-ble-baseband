@@ -1,10 +1,10 @@
 package baseband
 
 import chisel3._
-import chisel3.experimental._
 import chisel3.util._
 import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+
+import ee290cdma._
 
 class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
@@ -15,26 +15,35 @@ class BasebandConstants extends Bundle {
   val loopbackSelect = UInt(32.W)
 }
 
+class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {
+  val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(9)))
+  val writeReq = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
+}
+
+class BasebandControlIO(addrBits: Int) extends Bundle {
+  val assembler = new Bundle {
+    val in = Flipped(Decoupled(new PAControlInputBundle))
+    val out = Output(new PAControlOutputBundle)
+  }
+}
+
 class BasebandIO(addrBits: Int, beatBytes: Int) extends Bundle {
-  val control = new Bundle {
-    // TODO: Everything needed to control the basebands operation likely:
-    //  1. out: disassembler busy (can't TX)
-    //  2. out: assembler busy (can't RX or start new TX)
-    //  3. in: mode select (if neither is busy which device is active)
-  }
   val constants = Input(new BasebandConstants)
-  val dma = new Bundle {
-    val readResp = Flipped(Decoupled(new BasebandReaderResp))
-    val writeReq = Decoupled(new BasebandWriterReq(addrBits, beatBytes))
-  }
+  val control = new BasebandControlIO(addrBits)
+  val dma = new BasebandDMAIO(addrBits, beatBytes)
   val modem = Flipped(new GFSKModemDigitalIO)
 }
 
-class Baseband(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule {
-  lazy val module = new LazyModuleImp(this) {
-    val io = IO(new BasebandIO(addrBits, beatBytes))
+class Baseband(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends Module {
+  val io = IO(new BasebandIO(addrBits, beatBytes))
 
-    val assembler = new PacketAssembler
-    val disassembler = new PacketDisassembler
-  }
+  val dmaPacketDisassembler = new DMAPacketDisassembler(beatBytes)
+  val assembler = new PacketAssembler
+  dmaPacketDisassembler.io.out.done := assembler.io.out.control.done
+  assembler.io.out.data.bits := dmaPacketDisassembler.io.out.data
+
+
+  val dmaPacketAssembler = new DMAPacketAssembler(beatBytes)
+  val disassembler = new PacketDisassembler
+  dmaPacketAssembler.io.in.done := disassembler.io.out.bits.done
 }
