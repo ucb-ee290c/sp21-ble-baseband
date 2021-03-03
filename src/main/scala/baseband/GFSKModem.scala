@@ -23,29 +23,29 @@ class GFSKModem()(implicit p: Parameters) extends Module {
   })
 
   // The queues must be wired to clock and io.modemClock outside of the withClock section, else clock = io.modemClock
-//  val txQueue = new AsyncQueue(UInt(1.W), AsyncQueueParams(depth = 128)) // TODO: Make this a parameterizable value
-//  txQueue.io.enq_clock := clock
-//  txQueue.io.enq_reset := reset
-//  txQueue.io.deq_clock := io.modemClock
-//  txQueue.io.deq_reset := reset
-//
-//  val rxQueue = new AsyncQueue(UInt(1.W), AsyncQueueParams(depth = 128)) // TODO: Make this a parameterizable value
-//  rxQueue.io.enq_clock := io.modemClock
-//  rxQueue.io.enq_reset := reset
-//  rxQueue.io.deq_clock := clock
-//  rxQueue.io.deq_reset := reset
-//
-//  withClock(io.modemClock) {
-//    val tx = new GFSKTX()
-//    val rx = new GFSKRX()
-//
-//    tx.io.analog <> io.analog.tx
-//    rx.io.analog <> io.analog.rx
-//
-//    txQueue.io.enq <> io.digital.tx
-//    tx.io.digital.in <> txQueue.io.deq
-//
-//    rxQueue.io.enq <> rx.io.digital.out
-//    io.digital.rx <> rxQueue.io.deq
-//  }
+  val txQueue = new AsyncQueue(UInt(1.W), AsyncQueueParams(depth = 128)) // TODO: Make this a parameterizable value
+  txQueue.io.enq_clock := clock
+  txQueue.io.enq_reset := reset
+  txQueue.io.deq_clock := io.modemClock
+  txQueue.io.deq_reset := reset
+
+  val rxQueue = new AsyncQueue(UInt(1.W), AsyncQueueParams(depth = 128)) // TODO: Make this a parameterizable value
+  rxQueue.io.enq_clock := io.modemClock
+  rxQueue.io.enq_reset := reset
+  rxQueue.io.deq_clock := clock
+  rxQueue.io.deq_reset := reset
+
+  withClock(io.modemClock) {
+    val tx = new GFSKTX()
+    val rx = new GFSKRX()
+
+    tx.io.analog <> io.analog.tx
+    rx.io.analog <> io.analog.rx
+
+    txQueue.io.enq <> io.digital.tx
+    tx.io.digital.in <> txQueue.io.deq
+
+    rxQueue.io.enq <> rx.io.digital.out
+    io.digital.rx <> rxQueue.io.deq
+  }
 }

@@ -121,7 +121,6 @@ class PacketAssembler extends Module {
   // Output control
   io.out.control.busy := state =/= s_idle
 
-
   // State Transition with counter updates
   when(state === s_idle) {
     data_in_ready := false.B

@@ -16,7 +16,7 @@ class BasebandConstants extends Bundle {
 }
 
 class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {
-  val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(9)))
+  val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(258)))
   val writeReq = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
 }
 
@@ -37,13 +37,15 @@ class BasebandIO(addrBits: Int, beatBytes: Int) extends Bundle {
 class Baseband(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends Module {
   val io = IO(new BasebandIO(addrBits, beatBytes))
 
-  val dmaPacketDisassembler = new DMAPacketDisassembler(beatBytes)
-  val assembler = new PacketAssembler
-  dmaPacketDisassembler.io.out.done := assembler.io.out.control.done
-  assembler.io.out.data.bits := dmaPacketDisassembler.io.out.data
+  val dmaPacketDisassembler = Module(new DMAPacketDisassembler(beatBytes))
+  val assembler = Module(new PacketAssembler)
+  dmaPacketDisassembler.io.consumer.done := assembler.io.out.control.done
+  assembler.io.in.data <> dmaPacketDisassembler.io.consumer.data
+  //dmaPacketDisassembler.io.dmaIn <> io.dma TODO: We need to make write requests, and receive read data
 
 
-  val dmaPacketAssembler = new DMAPacketAssembler(beatBytes)
-  val disassembler = new PacketDisassembler
-  dmaPacketAssembler.io.in.done := disassembler.io.out.bits.done
+  val dmaPacketAssembler = Module(new DMAPacketAssembler(beatBytes))
+  val disassembler = Module(new PacketDisassembler)
+  //dmaPacketAssembler.io.producer.done := disassembler.io.out.done
+  //dmaPacketAssembler.io.producer.data <> disassembler.io.out.data
 }

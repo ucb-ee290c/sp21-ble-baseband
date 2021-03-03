@@ -21,7 +21,7 @@ class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends 
       val cmd = Flipped(Decoupled(new RoCCCommand))
       val constants = Output(new BasebandConstants) // TODO: Rename? Includes constants that will be used by modem too
       val dma = new Bundle {
-        val read = Decoupled(new EE290CDMAReaderReq(addrBits, 9)) // Controller only issues read requests, the baseband issues write requests
+        val read = Decoupled(new EE290CDMAReaderReq(addrBits, 258)) // Controller only issues read requests, the baseband issues write requests
       }
       val interrupt = new Bundle {
         val signal = Output(Bool())
