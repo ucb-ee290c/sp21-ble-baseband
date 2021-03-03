@@ -101,8 +101,8 @@ class PacketAssembler extends Module {
   val white_seed = io.constants.whiteningSeed
 
   // Handshake parameters
-  val data_in_ready = Wire(Bool())
-  val data_out_valid = Wire(Bool())
+  val data_in_ready = Reg(Bool())
+  val data_out_valid = Reg(Bool())
   val data_out_fire = io.out.data.fire()
   val data_in_fire = io.in.data.fire()
 
@@ -116,6 +116,8 @@ class PacketAssembler extends Module {
   io.in.control.ready := state === s_idle
 
   // Output data
+  val done = Reg(Bool())
+  io.out.control.done := done
   io.out.data.bits := Mux(state === s_pdu_header || state === s_pdu_payload || state === s_crc, white_result, data(counter_byte))
 
   // Output control
@@ -125,7 +127,7 @@ class PacketAssembler extends Module {
   when(state === s_idle) {
     data_in_ready := false.B
     data_out_valid := false.B
-    io.out.control.done := false.B
+    done := false.B
 
     when(io.in.control.fire) {
       state := s_preamble
@@ -184,7 +186,7 @@ class PacketAssembler extends Module {
     counter_byte := counterByteOut
 
     when (stateOut === s_idle) {
-      io.out.control.done := true.B // We are done on our transition to idle
+      done := true.B // We are done on our transition to idle
       data_out_valid := false.B
     }
   }.otherwise {

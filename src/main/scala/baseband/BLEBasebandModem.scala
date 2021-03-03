@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental._
 import freechips.rocketchip.config.{Field, Parameters}
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
-import freechips.rocketchip.regmapper.{HasRegMap, RegField}
+import freechips.rocketchip.regmapper.{HasRegMap, RegField, RegisterWriteIO}
 import freechips.rocketchip.tilelink.{TLIdentityNode, TLRegBundle, TLRegModule, TLRegisterRouter}
 
 import ee290cdma._
@@ -29,8 +29,8 @@ class BLEBasebandModemCommand extends Bundle {
 }
 
 class BLEBasebandModemBackendIO extends Bundle {
-  val cmd = Flipped(Decoupled(new BLEBasebandModemCommand))
-  val interrupt = Output(Bool())
+  val cmd = Decoupled(new BLEBasebandModemCommand)
+  val interrupt = Input(Bool())
 }
 
 trait BLEBasebandModemFrontendBundle extends Bundle {
@@ -40,52 +40,55 @@ trait BLEBasebandModemFrontendBundle extends Bundle {
 trait BLEBasebandModemFrontendModule extends HasRegMap {
   val io: BLEBasebandModemFrontendBundle
 
-  val inst = Wire(Decoupled(UInt(32.W)))
-  val data = Wire(UInt(32.W))
+  val inst = Wire(new DecoupledIO(UInt(32.W)))
+  val data = Reg(UInt(32.W))
 
   // Writing to the instruction triggers the command to be valid.
   // So if you wish to set data you write that first then write inst
   inst.ready := io.back.cmd.ready
-  io.back.cmd.valid := inst.valid
-  io.back.cmd.bits.inst := inst.bits
   io.back.cmd.bits.data := data
+  io.back.cmd.bits.inst := inst.bits
+  io.back.cmd.valid := inst.valid
 
   interrupts(0) := io.back.interrupt
 
   regmap(
     0x00 -> Seq(RegField.w(32, inst)),
-    0x04 -> Seq(RegField.w(32, data))
+    0x04 -> Seq(RegField.w(32, io.back.cmd.bits.data))
   )
 }
 
 class BLEBasebandModemFrontend(params: BLEBasebandModemParams, beatBytes: Int)(implicit p: Parameters)
   extends TLRegisterRouter(
-    params.address, "baseband", Seq("ucbbar, gcd"),
-    beatBytes = beatBytes, interrupts = 1)( // TODO: Interrupts
+    params.address, "baseband", Seq("ucbbar, riscv"),
+    beatBytes = beatBytes, interrupts = 1)( // TODO: Interrupts and compatible list
       new TLRegBundle(params, _) with BLEBasebandModemFrontendBundle)(
       new TLRegModule(params, _, _) with BLEBasebandModemFrontendModule)
 
 class BLEBasebandModem(params: BLEBasebandModemParams, beatBytes: Int)(implicit p: Parameters) extends LazyModule {
-  val dma = new EE290CDMA(beatBytes, params.maxReadSize, "baseband")
+  val dma = LazyModule(new EE290CDMA(beatBytes, params.maxReadSize, "baseband"))
 
   val mmio = TLIdentityNode()
   val mem = dma.id_node
 
-  val frontend = LazyModule(new BLEBasebandModemFrontend(params, beatBytes))
+  val basebandFrontend = LazyModule(new BLEBasebandModemFrontend(params, beatBytes))
+  val intnode = basebandFrontend.intnode
 
-  frontend.node := mmio
+  basebandFrontend.node := mmio
 
   lazy val module = new BLEBasebandModemImp(params,this)
 }
 
 class BLEBasebandModemImp(params: BLEBasebandModemParams, outer: BLEBasebandModem) extends LazyModuleImp(outer) {
-  val io = dontTouch(IO(new Bundle {
-    val baseband = new BLEBasebandModemAnalogIO
-  }))
+  val io = dontTouch(IO(new BLEBasebandModemAnalogIO))
 
   import outer._
 
-  val cmdQueue = Queue(frontend.module.io.back.cmd, params.cmdQueueDepth)
+  basebandFrontend.module.io.back.interrupt := false.B
+
+  val cmdQueue = Queue(basebandFrontend.module.io.back.cmd, params.cmdQueueDepth)
+
+  cmdQueue.ready := false.B
 }
 
 //class BLEBasebandModem(params: BLEBasebandModemParams)(implicit p: Parameters) extends LazyRoCC(opcodes = opcodes) {
