@@ -6,35 +6,41 @@ package baseband
 import chisel3._
 import chisel3.util._
 
-class PDAInputBundle extends Bundle {
-  val switch = Bool()
-  // TODO: Rework logic for switch, and place it not inside one massive ready valid interface
-  //  ideally we will be able to switch the PD back into s_idle from s_preamble if preamble is not detected yet
-  val data = UInt(1.W)
+class PDAControlInputBundle extends Bundle {
+  val aa = UInt(32.W)
 }
 
-class PDAOutputBundle extends Bundle {
-  val data = UInt(8.W)
+class PDAInputIO extends Bundle {
+  val control = Input(new PDAControlInputBundle)
+  val data = Flipped(Decoupled(UInt(1.W)))
+}
+
+class PDAControlOutputBundle extends Bundle {
   val length = UInt(8.W)
   val flag_aa = Bool()
   val flag_crc = Bool()
-  val done = Bool() // TODO: Remove done from the decoupled bundle / generally break this down
+  val done = Bool() // Treat this as a "valid" when done is high we guarantee the other signals have their correct value
+  val busy = Bool() // TODO: Set this to be state =/= s_idle
+}
+
+class PDAOutputIO extends Bundle {
+  val control = Output(new PDAControlOutputBundle)
+  val data = Decoupled(UInt(8.W))
 }
 
 class PacketDisassemblerIO extends Bundle {
-  val in = Flipped(Decoupled(new PDAInputBundle))
-  val out = Decoupled(new PDAOutputBundle)
-  val busy = Output(Bool()) // TODO: Set this to be state =/= s_idle
+  val in = new PDAInputIO
+  val out = new PDAOutputIO
+  val constants = Input(new BasebandConstants)
 }
 
 class PacketDisassembler extends Module {
-
   val io = IO(new PacketDisassemblerIO)
 
   val s_idle :: s_preamble :: s_aa :: s_pdu_header :: s_pdu_payload :: s_crc :: s_wait_dma :: Nil = Enum(7)
   val state = RegInit(s_idle)
 
-  val reg_aa = "b10001110100010011011111011010110".U
+  val aa = Reg(UInt(32.W))
 
   val counter = RegInit(0.U(8.W)) //counter for bytes in packet
   val counter_byte = RegInit(0.U(3.W)) //counter for bits in bytes
@@ -48,11 +54,11 @@ class PacketDisassembler extends Module {
   //Preamble
   val preamble0 = "b10101010".U
   val preamble1 = "b01010101".U
-  val preamble = Mux(reg_aa(0) === 0.U, preamble0, preamble1) // TODO: Do we want to let the Access Address be changed in configuration
+  val preamble = Mux(aa(0), preamble1, preamble0)
 
   //Handshake Parameters
-  val out_valid = RegInit(false.B) // TODO: Why are these registers?
-  val in_ready = RegInit(Bool(), false.B)
+  val out_valid = RegInit(false.B)
+  val in_ready = RegInit(false.B)
 
   //data registers
 
@@ -63,21 +69,21 @@ class PacketDisassembler extends Module {
   val crc_data = Wire(UInt(1.W))
   val crc_valid = Wire(Bool())
   val crc_result = Wire(UInt(24.W))
-  val crc_seed = "b010101010101010101010101".U // TODO: Let CRC be seeded from input
+  val crc_seed = io.constants.crcSeed
 
   //whitening
   val dewhite_reset = state === s_idle
   val dewhite_data = Wire(UInt(1.W))
   val dewhite_valid = Wire(Bool())
   val dewhite_result = Wire(UInt(1.W))
-  val dewhite_seed = "b1100101".U // TODO: Let whitening be seeded from input
+  val dewhite_seed = io.constants.whiteningSeed
 
 
 
   //output function
-  io.out.bits.data := Mux(state === s_idle || state === s_preamble, 0.U, data.asUInt)
+  io.out.data.bits := Mux(state === s_idle || state === s_preamble, 0.U, data.asUInt)
 
-  done := state === s_crc && counter === 2.U && counter_byte === 7.U && io.in.fire()
+  done := state === s_crc && counter === 2.U && counter_byte === 7.U && io.in.data.fire()
 
   io.out.bits.length := length
   io.out.bits.flag_aa := flag_aa
@@ -247,28 +253,27 @@ class PacketDisassembler extends Module {
 
   //data
   when (state === s_pdu_header || state === s_pdu_payload || state === s_crc) {
-    when (io.in.fire()) {
+    when (io.in.data.fire()) {
       data(counter_byte) := dewhite_result =/= 0.U
     }
   }.elsewhen (state === s_preamble) {
-    when (io.in.fire()) {
+    when (io.in.data.fire()) {
       //data(7) := io.in.bits.data.toBools //note: subword assignment
-      data(7) := io.in.bits.data =/= 0.U
+      data(7) := io.in.data.bits.asBool()
       for(i <- 0 to 6) {//value shifting
         data(i) := data(i+1)
       }
     }
   }.elsewhen (state === s_aa) {
-    when (io.in.fire()) {
-      //data(counter_byte) := io.in.bits.data.toBools
-      data(counter_byte) := io.in.bits.data =/= 0.U
+    when (io.in.data.fire()) {
+      data(counter_byte) := io.in.data.bits.asBool()
     }
   }
 
   //crc
   when (state === s_pdu_header || state === s_pdu_payload) {//check corner cases
     crc_data := dewhite_result
-    crc_valid := io.in.fire()
+    crc_valid := io.in.data.fire()
   }.otherwise {
     crc_data := 0.U
     crc_valid := false.B
@@ -277,8 +282,8 @@ class PacketDisassembler extends Module {
 
   //dewhitening
   when (state === s_pdu_header || state === s_pdu_payload || state === s_crc) {//check corner cases
-    dewhite_data  := io.in.bits.data
-    dewhite_valid := io.in.fire()
+    dewhite_data  := io.in.data.bits
+    dewhite_valid := io.in.data.fire()
   }.otherwise {
     dewhite_data  := 0.U
     dewhite_valid := false.B
