@@ -20,6 +20,7 @@ case object BLEBasebandModemKey extends Field[Option[BLEBasebandModemParams]](No
 
 class BLEBasebandModemAnalogIO extends Bundle {
   val modemClock = Input(Clock())
+  val offChipMode = Output(Bool())
   val data = new GFSKModemAnalogIO
   val tuning = Output(new GFSKModemTuningIO)
 }
@@ -55,7 +56,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   regmap(
     0x00 -> Seq(RegField.w(32, inst)),
-    0x04 -> Seq(RegField.w(32, io.back.cmd.bits.data))
+    0x04 -> Seq(RegField.w(32, data))
   )
 }
 

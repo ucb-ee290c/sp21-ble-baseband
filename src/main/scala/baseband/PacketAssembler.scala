@@ -184,6 +184,7 @@ class PacketAssembler extends Module {
     counter_byte := counterByteOut
 
     when (stateOut === s_crc) {
+      data := crc_result(7,0)
       data_in_ready := false.B // Our next state is CRC, we do not need more data
       data_out_valid := true.B // The output is fully present in CRC
     }.elsewhen (counter_byte === 7.U && data_out_fire) { // We have cleared the last output bit from this byte
@@ -199,6 +200,12 @@ class PacketAssembler extends Module {
     counter := counterOut
     counter_byte := counterByteOut
 
+    when(counterOut === 1.U) {
+      data := crc_result(15,8)
+    }.elsewhen(counterOut === 2.U) {
+      data := crc_result(23,16)
+    }
+
     when (stateOut === s_idle) {
       done := true.B // We are done on our transition to idle
       data_out_valid := false.B
@@ -212,17 +219,7 @@ class PacketAssembler extends Module {
     when(data_in_fire) {
       data := io.in.data.bits
     }
-  }.elsewhen(state === s_crc) {
-    when(counter === 0.U) {
-      data := crc_result(7,0)
-    }.elsewhen(counter === 1.U) {
-      data := crc_result(15,8)
-    }.elsewhen(counter === 2.U) {
-      data := crc_result(23,16)
-    }
- }.elsewhen(state === s_idle) { // Idle
-   data := 0.U // TODO: Possibly can be eliminated
- }
+  }
 
   //Set CRC Parameters
   when(state === s_pdu_header || state === s_pdu_payload) {
