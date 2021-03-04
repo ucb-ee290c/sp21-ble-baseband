@@ -21,6 +21,7 @@ case object BLEBasebandModemKey extends Field[Option[BLEBasebandModemParams]](No
 class BLEBasebandModemAnalogIO extends Bundle {
   val modemClock = Input(Clock())
   val data = new GFSKModemAnalogIO
+  val tuning = Output(new GFSKModemTuningIO)
 }
 
 class BLEBasebandModemCommand extends Bundle {
