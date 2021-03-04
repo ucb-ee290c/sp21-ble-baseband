@@ -31,7 +31,8 @@ class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends 
 
     val constants = RegInit(new BasebandConstants, new BasebandConstants().Lit(
       _.crcSeed -> "b010101010101010101010101".U,
-      _.whiteningSeed -> "b1100101".U
+      _.whiteningSeed -> "b1100101".U,
+      _.accessAddress -> "x8E89BED6".U
     ))
 
     io.constants := constants

@@ -82,8 +82,8 @@ class PacketAssembler extends Module {
   val pdu_length = RegInit(0.U(8.W))
 
   // Preambles: Reversed since we read LSB to MSB
-  val preamble0 = Reverse("b01010101".U)
-  val preamble1 = Reverse("b10101010".U)
+  val preamble0 = "b10101010".U
+  val preamble1 = "b01010101".U
   val preamble = Mux(aa(0), preamble1, preamble0)
 
   // CRC
@@ -135,19 +135,31 @@ class PacketAssembler extends Module {
       counter_byte := 0.U
       aa := io.in.control.bits.aa
       pdu_length := io.in.control.bits.pduLength
-      data_out_valid := true.B // Out is valid in preamble and AA unconditionally (all data is present)
     }
   }.elsewhen(state === s_preamble) {
     val (stateOut, counterOut, counterByteOut) = stateUpdate(s_preamble, s_aa, 1.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
+    data_out_valid := true.B
+    when (stateOut === s_aa) {
+      data := aa(7,0)
+    }.otherwise {
+      data := preamble
+    }
   }.elsewhen(state === s_aa) {
     val (stateOut, counterOut, counterByteOut) = stateUpdate(s_aa, s_pdu_header, 4.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
 
+    when(counterOut === 1.U) {
+      data := aa(15,8)
+    }.elsewhen(counterOut === 2.U) {
+      data := aa(23,16)
+    }.elsewhen(counterOut === 3.U) {
+      data := aa(31,24)
+    }
     when (stateOut === s_pdu_header) {
       data_in_ready := true.B // Start PDU header with an in ready (first time we need input data)
       data_out_valid := false.B // Start PDU header with a out invalid (need to get input data first)
@@ -176,8 +188,10 @@ class PacketAssembler extends Module {
       data_out_valid := true.B // The output is fully present in CRC
     }.elsewhen (counter_byte === 7.U && data_out_fire) { // We have cleared the last output bit from this byte
       data_in_ready := true.B
+      data_out_valid := false.B
     }.elsewhen (data_in_fire) { // We have received a new input byte
       data_in_ready := false.B
+      data_out_valid := true.B
     }
   }.elsewhen(state === s_crc) {
     val (stateOut, counterOut, counterByteOut) = stateUpdate(s_crc, s_idle, 3.U, counter, counter_byte, data_out_fire)
@@ -194,11 +208,7 @@ class PacketAssembler extends Module {
   }
 
   //data
-  when(state === s_preamble) {
-      data := preamble
-  }.elsewhen(state === s_aa) {
-    data := aa
-  }.elsewhen(state === s_pdu_header || state === s_pdu_payload) {
+  when(state === s_pdu_header || state === s_pdu_payload) {
     when(data_in_fire) {
       data := io.in.data.bits
     }
@@ -210,9 +220,9 @@ class PacketAssembler extends Module {
     }.elsewhen(counter === 2.U) {
       data := crc_result(23,16)
     }
-  }.otherwise { // Idle
-    data := 0.U // TODO: Possibly can be eliminated
-  }
+ }.elsewhen(state === s_idle) { // Idle
+   data := 0.U // TODO: Possibly can be eliminated
+ }
 
   //Set CRC Parameters
   when(state === s_pdu_header || state === s_pdu_payload) {
