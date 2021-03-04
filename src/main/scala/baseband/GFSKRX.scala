@@ -7,6 +7,7 @@ import freechips.rocketchip.config.Parameters
 class AnalogRXIO extends Bundle {
   val i = Input(UInt(5.W))
   val q = Input(UInt(5.W))
+  val freqCenter = Output(UInt(6.W))
 }
 
 class GFSKRX()(implicit p: Parameters) extends Module {

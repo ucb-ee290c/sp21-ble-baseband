@@ -15,6 +15,45 @@ class GFSKModemAnalogIO extends Bundle {
   val rx = new AnalogRXIO
 }
 
+class GFSKModemTuningIO extends Bundle {
+  val mixer = new Bundle {
+    val r0 = UInt(4.W)
+    val r1 = UInt(4.W)
+    val r2 = UInt(4.W)
+    val r3 = UInt(4.W)
+  }
+  val i = new Bundle {
+    val vgaAtten = UInt(5.W)
+    val filter = new Bundle {
+      val r0 = UInt(4.W)
+      val r1 = UInt(4.W)
+      val r2 = UInt(4.W)
+      val r3 = UInt(4.W)
+      val r4 = UInt(4.W)
+      val r5 = UInt(4.W)
+      val r6 = UInt(4.W)
+      val r7 = UInt(4.W)
+      val r8 = UInt(4.W)
+      val r9 = UInt(4.W)
+    }
+  }
+  val q = new Bundle {
+    val vgaAtten = UInt(5.W)
+    val filter = new Bundle {
+      val r0 = UInt(4.W)
+      val r1 = UInt(4.W)
+      val r2 = UInt(4.W)
+      val r3 = UInt(4.W)
+      val r4 = UInt(4.W)
+      val r5 = UInt(4.W)
+      val r6 = UInt(4.W)
+      val r7 = UInt(4.W)
+      val r8 = UInt(4.W)
+      val r9 = UInt(4.W)
+    }
+  }
+}
+
 class GFSKModem()(implicit p: Parameters) extends Module {
   val io = IO(new Bundle {
     val modemClock = Input(Clock())
