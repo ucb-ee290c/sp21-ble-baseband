@@ -21,11 +21,11 @@ class PacketAssemblerTest extends AnyFlatSpec with ChiselScalatestTester {
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.out.data, 0)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.out.data)
 
-      val pduLength = 15
-      val inBytes = Seq.tabulate(pduLength + 2)(i => i)
+      val pduLength = scala.util.Random.nextInt(255)
+      val inBytes = Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255)) // Need to add two for the header <IMPORTANT: In controller make sure to request bytesRead-2 as pduLength>
       val aa = BigInt("8E89BED6", 16)
 
-      c.io.constants.whiteningSeed.poke("b0000000".U)
+      c.io.constants.channelIndex.poke("b000000".U)
 
       val preambleExpected = "01010101".map(c => c.toString.toInt)
       val aaExpected = aa.toInt.toBinaryString.reverse.map(c => c.toString.toInt)
@@ -51,11 +51,11 @@ class PacketAssemblerTest extends AnyFlatSpec with ChiselScalatestTester {
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.out.data, 0)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.out.data)
 
-      val pduLength = 15
-      val inBytes = Seq.tabulate(pduLength + 2)(i => i) // Need to add two for the header <IMPORTANT: In controller make sure to request bytesRead-2 as pduLength>
+      val pduLength = scala.util.Random.nextInt(255)
+      val inBytes = Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255)) // Need to add two for the header <IMPORTANT: In controller make sure to request bytesRead-2 as pduLength>
       val aa = BigInt("8E89BED6", 16)
 
-      c.io.constants.whiteningSeed.poke((scala.util.Random.nextInt(126) + 1).U) // Poke random 7 bit value (not 0)
+      c.io.constants.channelIndex.poke((scala.util.Random.nextInt(62) + 1).U) // Poke random 6 bit value (not 0)
 
       val preambleExpected = "01010101".map(c => c.toString.toInt)
       val aaExpected = aa.toInt.toBinaryString.reverse.map(c => c.toString.toInt)

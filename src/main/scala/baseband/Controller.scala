@@ -31,7 +31,7 @@ class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends 
 
     val constants = RegInit(new BasebandConstants, new BasebandConstants().Lit(
       _.crcSeed -> "b010101010101010101010101".U,
-      _.whiteningSeed -> "b1100101".U,
+      _.channelIndex -> "b010011".U,
       _.accessAddress -> "x8E89BED6".U
     ))
 
@@ -59,7 +59,7 @@ class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends 
                   constants.crcSeed := cmd.rs1
                 }
                 is(BasebandISA.CONFIG_WHITENING_SEED) {
-                  constants.whiteningSeed := cmd.rs1
+                  constants.channelIndex := cmd.rs1
                 }
                 is(BasebandISA.CONFIG_ACCESS_ADDRESS) {
                   constants.accessAddress := cmd.rs1
@@ -84,7 +84,7 @@ class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends 
                 //when (~io.basebandControl.disassembler.out.control.busy & ~io.modemControl.rx.out.busy) {
                   io.basebandControl.assembler.in.valid := true.B
                   io.basebandControl.assembler.in.bits.aa := constants.accessAddress
-                  io.basebandControl.assembler.in.bits.pduLength := io.cmd.bits.rs2
+                  io.basebandControl.assembler.in.bits.pduLength := io.cmd.bits.rs2 - 2.U
                   // TODO: switch disassembler off
 
                   state := s_tx

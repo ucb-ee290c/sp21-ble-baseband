@@ -9,7 +9,6 @@ import ee290cdma._
 class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
   val crcSeed = UInt(24.W)
-  val whiteningSeed = UInt(7.W)
   val accessAddress = UInt(32.W)
   val additionalFrameSpace = UInt(32.W)
   val loopbackSelect = UInt(32.W)
