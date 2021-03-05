@@ -16,6 +16,16 @@ class GFSKModemAnalogIO extends Bundle {
 }
 
 class GFSKModemTuningIO extends Bundle {
+  val trim = new Bundle {
+    val g0 = UInt(8.W)
+    val g1 = UInt(8.W)
+    val g2 = UInt(8.W)
+    val g3 = UInt(8.W)
+    val g4 = UInt(8.W)
+    val g5 = UInt(8.W)
+    val g6 = UInt(8.W)
+    val g7 = UInt(8.W)
+  }
   val mixer = new Bundle {
     val r0 = UInt(4.W)
     val r1 = UInt(4.W)

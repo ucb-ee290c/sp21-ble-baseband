@@ -30,18 +30,28 @@ class BLEBasebandModemCommand extends Bundle {
   val data = UInt(32.W)
 }
 
+class BLEBasebandModemStatus extends Bundle {
+  val status0 = UInt(32.W)
+  val status1 = UInt(32.W)
+  val status2 = UInt(32.W)
+  val status3 = UInt(32.W)
+  val status4 = UInt(32.W)
+}
 class BLEBasebandModemBackendIO extends Bundle {
   val cmd = Decoupled(new BLEBasebandModemCommand)
+  val status = Input(new BLEBasebandModemStatus)
   val interrupt = Input(Bool())
 }
 
 trait BLEBasebandModemFrontendBundle extends Bundle {
   val back = new BLEBasebandModemBackendIO
+  val tuning = Output(new GFSKModemTuningIO)
 }
 
 trait BLEBasebandModemFrontendModule extends HasRegMap {
   val io: BLEBasebandModemFrontendBundle
 
+  // Instruction from processor
   val inst = Wire(new DecoupledIO(UInt(32.W)))
   val data = Reg(UInt(32.W))
 
@@ -52,11 +62,153 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.back.cmd.bits.inst := inst.bits
   io.back.cmd.valid := inst.valid
 
+  // Status regs
+  val status0 = RegInit(0.U(32.W))
+  val status1 = RegInit(0.U(32.W))
+  val status2 = RegInit(0.U(32.W))
+  val status3 = RegInit(0.U(32.W))
+  val status4 = RegInit(0.U(32.W))
+
+  status0 := io.back.status.status0
+  status1 := io.back.status.status1
+  status2 := io.back.status.status2
+  status3 := io.back.status.status3
+  status4 := io.back.status.status4
+
+  // Tuning bits store
+  val trim_g0 = RegInit(0.U(8.W))
+  val trim_g1 = RegInit(0.U(8.W))
+  val trim_g2 = RegInit(0.U(8.W))
+  val trim_g3 = RegInit(0.U(8.W))
+  val trim_g4 = RegInit(0.U(8.W))
+  val trim_g5 = RegInit(0.U(8.W))
+  val trim_g6 = RegInit(0.U(8.W))
+  val trim_g7 = RegInit(0.U(8.W))
+
+  val mixer_r0 = RegInit(0.U(4.W))
+  val mixer_r1 = RegInit(0.U(4.W))
+  val mixer_r2 = RegInit(0.U(4.W))
+  val mixer_r3 = RegInit(0.U(4.W))
+
+  val i_vgaAtten = RegInit(0.U(5.W))
+  val i_filter_r0 = RegInit(0.U(4.W))
+  val i_filter_r1 = RegInit(0.U(4.W))
+  val i_filter_r2 = RegInit(0.U(4.W))
+  val i_filter_r3 = RegInit(0.U(4.W))
+  val i_filter_r4 = RegInit(0.U(4.W))
+  val i_filter_r5 = RegInit(0.U(4.W))
+  val i_filter_r6 = RegInit(0.U(4.W))
+  val i_filter_r7 = RegInit(0.U(4.W))
+  val i_filter_r8 = RegInit(0.U(4.W))
+  val i_filter_r9 = RegInit(0.U(4.W))
+
+  val q_vgaAtten = RegInit(0.U(5.W))
+  val q_filter_r0 = RegInit(0.U(4.W))
+  val q_filter_r1 = RegInit(0.U(4.W))
+  val q_filter_r2 = RegInit(0.U(4.W))
+  val q_filter_r3 = RegInit(0.U(4.W))
+  val q_filter_r4 = RegInit(0.U(4.W))
+  val q_filter_r5 = RegInit(0.U(4.W))
+  val q_filter_r6 = RegInit(0.U(4.W))
+  val q_filter_r7 = RegInit(0.U(4.W))
+  val q_filter_r8 = RegInit(0.U(4.W))
+  val q_filter_r9 = RegInit(0.U(4.W))
+
+  io.tuning.trim.g0 := trim_g0
+  io.tuning.trim.g1 := trim_g1
+  io.tuning.trim.g2 := trim_g2
+  io.tuning.trim.g3 := trim_g3
+  io.tuning.trim.g4 := trim_g4
+  io.tuning.trim.g5 := trim_g5
+  io.tuning.trim.g6 := trim_g6
+  io.tuning.trim.g7 := trim_g7
+
+  io.tuning.mixer.r0 := mixer_r0
+  io.tuning.mixer.r1 := mixer_r1
+  io.tuning.mixer.r2 := mixer_r2
+  io.tuning.mixer.r3 := mixer_r3
+
+  io.tuning.i.vgaAtten := i_vgaAtten
+  io.tuning.i.filter.r0 := i_filter_r0
+  io.tuning.i.filter.r0 := i_filter_r1
+  io.tuning.i.filter.r0 := i_filter_r2
+  io.tuning.i.filter.r0 := i_filter_r3
+  io.tuning.i.filter.r0 := i_filter_r4
+  io.tuning.i.filter.r0 := i_filter_r5
+  io.tuning.i.filter.r0 := i_filter_r6
+  io.tuning.i.filter.r0 := i_filter_r7
+  io.tuning.i.filter.r0 := i_filter_r8
+  io.tuning.i.filter.r0 := i_filter_r9
+
+  io.tuning.q.vgaAtten := q_vgaAtten
+  io.tuning.q.filter.r0 := q_filter_r0
+  io.tuning.q.filter.r0 := q_filter_r1
+  io.tuning.q.filter.r0 := q_filter_r2
+  io.tuning.q.filter.r0 := q_filter_r3
+  io.tuning.q.filter.r0 := q_filter_r4
+  io.tuning.q.filter.r0 := q_filter_r5
+  io.tuning.q.filter.r0 := q_filter_r6
+  io.tuning.q.filter.r0 := q_filter_r7
+  io.tuning.q.filter.r0 := q_filter_r8
+  io.tuning.q.filter.r0 := q_filter_r9
+
+
   interrupts(0) := io.back.interrupt
 
   regmap(
-    0x00 -> Seq(RegField.w(32, inst)),
-    0x04 -> Seq(RegField.w(32, data))
+    0x00 -> Seq(RegField.w(32, inst)), // Command start
+    0x04 -> Seq(RegField.w(32, data)),
+    0x08 -> Seq(RegField.r(32, status0)), // Status start
+    0x0C -> Seq(RegField.r(32, status1)),
+    0x10 -> Seq(RegField.r(32, status2)),
+    0x14 -> Seq(RegField.r(32, status3)),
+    0x18 -> Seq(RegField.r(32, status4)),
+    0x1C -> Seq(RegField(8, trim_g0)), // Tuning start
+    0x1D -> Seq(RegField(8, trim_g1)),
+    0x1E -> Seq(RegField(8, trim_g2)),
+    0x1F -> Seq(RegField(8, trim_g3)),
+    0x20 -> Seq(RegField(8, trim_g4)),
+    0x21 -> Seq(RegField(8, trim_g5)),
+    0x22 -> Seq(RegField(8, trim_g6)),
+    0x23 -> Seq(RegField(8, trim_g7)),
+    0x24 -> Seq(
+      RegField(4, mixer_r0),
+      RegField(4, mixer_r1)),
+    0x25 -> Seq(
+      RegField(4, mixer_r2),
+      RegField(4, mixer_r3)),
+    0x26 -> Seq(RegField(5, i_vgaAtten)),
+    0x27 -> Seq(
+      RegField(4, i_filter_r0),
+      RegField(4, i_filter_r1)),
+    0x28 -> Seq(
+      RegField(4, i_filter_r2),
+      RegField(4, i_filter_r3)),
+    0x29 -> Seq(
+      RegField(4, i_filter_r4),
+      RegField(4, i_filter_r5)),
+    0x2A -> Seq(
+      RegField(4, i_filter_r6),
+      RegField(4, i_filter_r7)),
+    0x2B -> Seq(
+      RegField(4, i_filter_r8),
+      RegField(4, i_filter_r9)),
+    0x2C -> Seq(RegField(5, q_vgaAtten)),
+    0x2D -> Seq(
+      RegField(4, q_filter_r0),
+      RegField(4, q_filter_r1)),
+    0x2E -> Seq(
+      RegField(4, q_filter_r2),
+      RegField(4, q_filter_r3)),
+    0x2F -> Seq(
+      RegField(4, q_filter_r4),
+      RegField(4, q_filter_r5)),
+    0x30 -> Seq(
+      RegField(4, q_filter_r6),
+      RegField(4, q_filter_r7)),
+    0x31 -> Seq(
+      RegField(4, q_filter_r8),
+      RegField(4, q_filter_r9)),
   )
 }
 

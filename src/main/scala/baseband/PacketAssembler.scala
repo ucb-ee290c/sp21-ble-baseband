@@ -209,6 +209,9 @@ class PacketAssembler extends Module {
     when (stateOut === s_idle) {
       done := true.B // We are done on our transition to idle
       data_out_valid := false.B
+      data := 0.U
+      pdu_length := 0.U
+      aa := 0.U
     }
   }.otherwise {
     state := s_idle

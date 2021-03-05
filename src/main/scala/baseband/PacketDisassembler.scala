@@ -106,7 +106,7 @@ class PacketDisassembler extends Module {
 
 
   //output function
-  io.out.data.bits := Mux(state === s_idle || state === s_preamble, 0.U, data.asUInt)
+  io.out.data.bits := data.asUInt
 
   //done := state === s_crc && counter === 2.U && counter_byte === 7.U && in_fire
 
@@ -128,7 +128,9 @@ class PacketDisassembler extends Module {
   when (state === s_idle) {
     in_ready := false.B
     out_valid := false.B
+    data := 0.U(8.W).asBools()
 
+    length := 0.U
     flag_aa := false.B
     flag_crc := false.B
     done := false.B
@@ -258,6 +260,7 @@ class PacketDisassembler extends Module {
 
     when (stateOut === s_idle) {
       done := true.B
+      data := 0.U(8.W).asBools()
     }
   }.otherwise {
     state := s_idle

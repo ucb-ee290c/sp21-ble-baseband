@@ -58,9 +58,13 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
       paControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
       pdaControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
 
-      c.clock.step(pduLength*15)
-
       val expectedOut = inBytes
+
+      while(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length != expectedOut.length) {
+        c.clock.step()
+      }
+
+      c.clock.step(100)
 
       assert(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length == expectedOut.length)
 
@@ -89,9 +93,13 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
       paControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
       pdaControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
 
-      c.clock.step(pduLength*15)
-
       val expectedOut = inBytes
+
+      while(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length != expectedOut.length) {
+        c.clock.step()
+      }
+
+      c.clock.step(100)
 
       assert(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length == expectedOut.length)
 
@@ -110,7 +118,7 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
       val pdaDMADriver = new DecoupledDriverSlave(c.clock, c.io.disassembler.out.data, 0) // TODO: randomize?
       val pdaDMAMonitor = new DecoupledMonitor(c.clock, c.io.disassembler.out.data)
 
-      for (_ <- 0 until 4) {
+      for (_ <- 0 until 40) {
         val pduLength = scala.util.Random.nextInt(255)
         val inBytes = Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255))
         val aa = BigInt("8E89BED6", 16)
@@ -121,9 +129,13 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
         paControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
         pdaControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
 
-        c.clock.step(pduLength * 15)
-
         val expectedOut = inBytes
+
+        while(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length != expectedOut.length) {
+          c.clock.step()
+        }
+
+        c.clock.step(100)
 
         assert(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length == expectedOut.length)
 
@@ -137,7 +149,7 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
-  it should "Pass repeated circular tests with whitening" in {
+  it should "Still pass repeated circular tests with whitening" in {
     test(new PacketLoop).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val paControlDriver = new DecoupledDriverMaster(c.clock, c.io.assembler.control)
       val pdaControlDriver = new DecoupledDriverMaster(c.clock, c.io.disassembler.control)
@@ -145,7 +157,7 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
       val pdaDMADriver = new DecoupledDriverSlave(c.clock, c.io.disassembler.out.data, 0) // TODO: randomize?
       val pdaDMAMonitor = new DecoupledMonitor(c.clock, c.io.disassembler.out.data)
 
-      for (_ <- 0 until 4) {
+      for (_ <- 0 until 40) {
         val pduLength = scala.util.Random.nextInt(255)
         val inBytes = Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255))
         val aa = BigInt("8E89BED6", 16)
@@ -156,9 +168,13 @@ class PacketLoopTest extends AnyFlatSpec with ChiselScalatestTester {
         paControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
         pdaControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
 
-        c.clock.step(pduLength * 15)
-
         val expectedOut = inBytes
+
+        while(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length != expectedOut.length) {
+          c.clock.step()
+        }
+
+        c.clock.step(100)
 
         assert(pdaDMAMonitor.monitoredTransactions.map(x => x.data.litValue()).length == expectedOut.length)
 
