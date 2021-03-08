@@ -2,6 +2,7 @@ package baseband
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental._
 import freechips.rocketchip.config.Parameters
 
 import ee290cdma._
@@ -15,7 +16,7 @@ class BasebandConstants extends Bundle {
 }
 
 class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {
-  val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(258)))
+  val readData = Flipped(Decoupled(UInt((beatBytes * 8).W)))
   val writeReq = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
 }
 
@@ -24,27 +25,92 @@ class BasebandControlIO(addrBits: Int) extends Bundle {
     val in = Flipped(Decoupled(new PAControlInputBundle))
     val out = Output(new PAControlOutputBundle)
   }
+  val disassembler = new Bundle {
+    val in = Flipped(Decoupled(new PDAControlInputBundle))
+    val out = Output(new PDAControlOutputBundle)
+  }
+
+  val baseAddr = Flipped(Valid(UInt(addrBits.W)))
 }
 
-class BasebandIO(addrBits: Int, beatBytes: Int) extends Bundle {
+class BasebandDMAAddresser(addrBits: Int, beatBytes: Int) extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(Decoupled(new DMAPacketAssemblerDMAOUTIO(beatBytes)))
+    val out = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
+    val baseAddr = Flipped(Valid(UInt(addrBits.W)))
+  })
+
+  val out_valid = RegInit(false.B)
+  val out_ready = RegInit(false.B)
+  val out_totalBytes = Reg(UInt(log2Ceil(beatBytes + 1).W))
+  val out_data = Reg(UInt((8 * beatBytes).W))
+  val out_addr = Reg(UInt(addrBits.W))
+
+  val offset = RegInit(0.U(addrBits.W))
+
+  val baseAddr = Reg(UInt(addrBits.W))
+
+  io.out.valid := out_valid
+  io.out.bits.totalBytes := out_totalBytes
+  io.out.bits.data := out_data
+  io.out.bits.addr := out_addr
+  out_ready := io.out.ready
+
+  io.in.ready := out_ready
+
+  when (io.baseAddr.fire()) {
+    baseAddr := io.baseAddr.bits
+    offset := 0.U
+  } .elsewhen(io.in.fire()) {
+    offset := offset + io.in.bits.size
+
+    out_totalBytes := io.in.bits.size
+    out_data := io.in.bits.data
+    out_addr := baseAddr + offset
+  }
+
+  out_valid := io.in.valid
+
+}
+
+class BasebandIO(val addrBits: Int, val beatBytes: Int) extends Bundle {
   val constants = Input(new BasebandConstants)
   val control = new BasebandControlIO(addrBits)
   val dma = new BasebandDMAIO(addrBits, beatBytes)
   val modem = Flipped(new GFSKModemDigitalIO)
 }
 
-class Baseband(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends Module {
+class Baseband(addrBits: Int, beatBytes: Int) extends Module {
   val io = IO(new BasebandIO(addrBits, beatBytes))
 
   val dmaPacketDisassembler = Module(new DMAPacketDisassembler(beatBytes))
   val assembler = Module(new PacketAssembler)
+
   dmaPacketDisassembler.io.consumer.done := assembler.io.out.control.done
+  dmaPacketDisassembler.io.dmaIn <> io.dma.readData
+
+  assembler.io.constants := io.constants
   assembler.io.in.data <> dmaPacketDisassembler.io.consumer.data
-  //dmaPacketDisassembler.io.dmaIn <> io.dma TODO: We need to make write requests, and receive read data
+  assembler.io.in.control <> io.control.assembler.in
+
+  io.modem.tx <> assembler.io.out.data
+  io.control.assembler.out <> assembler.io.out.control
 
 
   val dmaPacketAssembler = Module(new DMAPacketAssembler(beatBytes))
   val disassembler = Module(new PacketDisassembler)
-  //dmaPacketAssembler.io.producer.done := disassembler.io.out.done
-  //dmaPacketAssembler.io.producer.data <> disassembler.io.out.data
+  dmaPacketAssembler.io.producer.done := disassembler.io.out.control.done
+  dmaPacketAssembler.io.producer.data <> disassembler.io.out.data
+
+  disassembler.io.constants := io.constants
+  disassembler.io.in.data <> io.modem.rx
+  disassembler.io.in.control <> io.control.disassembler.in
+
+  io.control.disassembler.out <> disassembler.io.out.control
+
+
+  val dmaAddresser = Module(new BasebandDMAAddresser(addrBits, beatBytes))
+  dmaAddresser.io.in <> dmaPacketAssembler.io.dmaOut
+  dmaAddresser.io.baseAddr <> io.control.baseAddr
+  io.dma.writeReq <> dmaAddresser.io.out
 }

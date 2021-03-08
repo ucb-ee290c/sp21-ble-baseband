@@ -165,15 +165,20 @@ class PacketAssembler extends Module {
       data_out_valid := false.B // Start PDU header with a out invalid (need to get input data first)
     }
   }.elsewhen(state === s_pdu_header) {
-    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_pdu_header, s_pdu_payload, 2.U, counter, counter_byte, data_out_fire)
+    val next_state = Mux(pdu_length =/= 0.U, s_pdu_payload, s_crc) // If we have a zero length PDU, skip PDU payload
+    val (stateOut, counterOut, counterByteOut) = stateUpdate(s_pdu_header, next_state, 2.U, counter, counter_byte, data_out_fire)
     state := stateOut
     counter := counterOut
     counter_byte := counterByteOut
 
-    when(counter_byte === 7.U && data_out_fire) { // We have cleared the last output bit from this byte
+    when (stateOut === s_crc) {
+      data := crc_result(7,0)
+      data_in_ready := false.B // Our next state is CRC, we do not need more data
+      data_out_valid := true.B // The output is fully present in CRC
+    }.elsewhen(counter_byte === 7.U && data_out_fire) { // We have cleared the last output bit from this byte
       data_in_ready := true.B
       data_out_valid := false.B
-    }.elsewhen(data_in_fire) {
+    }.elsewhen (data_in_fire) {
       data_in_ready := false.B // We have received a new input byte
       data_out_valid := true.B
     }

@@ -10,110 +10,114 @@ import freechips.rocketchip.tile.{HasCoreParameters, RoCCCommand, XLen}
 
 import ee290cdma._
 
-class Controller(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends LazyModule with HasCoreParameters {
-  lazy val io = module.io
+class Controller(addrBits: Int, beatBytes: Int) extends Module {
+  val io = IO(new Bundle {
+    val basebandControl = Flipped(new BasebandControlIO(addrBits))
+    val cmd = Flipped(Decoupled(new BLEBasebandModemCommand))
+    val constants = Output(new BasebandConstants) // TODO: Rename? Includes constants that will be used by modem too
+    val dma = new Bundle {
+      val read = Decoupled(new EE290CDMAReaderReq(addrBits, 258)) // Controller only issues read requests, the baseband issues write requests
+    }
+  })
 
-  lazy val module = new LazyModuleImp(this) {
-    val xLen = p(XLen)
+  val constants = RegInit(new BasebandConstants, WireInit(new BasebandConstants().Lit(
+    _.crcSeed -> "x555555".U,
+    _.channelIndex -> "b010011".U,
+    _.accessAddress -> "x8E89BED6".U
+  )))
 
-    val io = IO(new Bundle {
-      val basebandControl = new BasebandControlIO(addrBits)
-      val cmd = Flipped(Decoupled(new RoCCCommand))
-      val constants = Output(new BasebandConstants) // TODO: Rename? Includes constants that will be used by modem too
-      val dma = new Bundle {
-        val read = Decoupled(new EE290CDMAReaderReq(addrBits, 258)) // Controller only issues read requests, the baseband issues write requests
-      }
-      val interrupt = new Bundle {
-        val signal = Output(Bool())
-        val queue = Decoupled(UInt(xLen.W))
-      }
-    })
+  io.constants := constants
 
-    val constants = RegInit(new BasebandConstants, new BasebandConstants().Lit(
-      _.crcSeed -> "b010101010101010101010101".U,
-      _.channelIndex -> "b010011".U,
-      _.accessAddress -> "x8E89BED6".U
-    ))
+  val s_idle :: s_tx_waiting :: s_tx_active :: s_rx_waiting :: s_rx_active :: s_debug_waiting :: s_debug_active :: s_interrupt :: Nil = Enum(8)
 
-    io.constants := constants
+  val state = RegInit(s_idle)
 
-    val s_idle :: s_tx :: s_rx :: s_interrupt :: Nil = Enum(4)
-    val state = RegInit(s_idle)
+  val cmd = Reg(new BLEBasebandModemCommand)
 
-    val cmd = Reg(new RoCCCommand)
+  // Baseband control wires
+  io.basebandControl.assembler.in.bits.aa := constants.accessAddress
+  io.basebandControl.assembler.in.bits.pduLength := io.cmd.bits.inst.data - 2.U
+  io.basebandControl.assembler.in.valid := state === s_tx_waiting | state === s_debug_waiting
 
-    io.cmd.ready := state === s_idle
-    io.interrupt.queue.valid := state === s_interrupt
+  io.basebandControl.disassembler.in.bits.aa := constants.accessAddress
+  io.basebandControl.disassembler.in.valid := state === s_rx_waiting | state === s_debug_waiting
 
-    switch(state) {
-      is (s_idle) {
-        io.interrupt.signal := false.B
-        when(false.B) { // TODO: if the disassembler thinks it is working on a packet we need to switch to RX mode
-          state := s_rx
-        }
-        .elsewhen(io.cmd.fire) {
-          switch(io.cmd.bits.inst.funct) {
-            is(BasebandISA.CONFIG_CMD) { // Don't need to waste a cycle to setup config
-              switch(io.cmd.bits.inst.rs2) {
-                is(BasebandISA.CONFIG_CRC_SEED) {
-                  constants.crcSeed := cmd.rs1
-                }
-                is(BasebandISA.CONFIG_WHITENING_SEED) {
-                  constants.channelIndex := cmd.rs1
-                }
-                is(BasebandISA.CONFIG_ACCESS_ADDRESS) {
-                  constants.accessAddress := cmd.rs1
-                }
-                is(BasebandISA.CONFIG_CHANNEL_INDEX) {
-                  constants.channelIndex := cmd.rs1
-                }
-                is(BasebandISA.CONFIG_ADDITIONAL_FRAME_SPACE) {
-                  constants.additionalFrameSpace := cmd.rs1
-                }
-                is(BasebandISA.CONFIG_LOOPBACK_SELECT) {
-                  constants.loopbackSelect := cmd.rs1
-                }
+  // Command wires
+  io.cmd.ready := state === s_idle
+
+  switch(state) {
+    is (s_idle) {
+      when (io.cmd.fire) {
+        switch (io.cmd.bits.inst.primaryInst) {
+          is (BasebandISA.CONFIG_CMD) { // Don't need to waste a cycle to setup config
+            switch (io.cmd.bits.inst.secondaryInst) {
+              is (BasebandISA.CONFIG_CRC_SEED) {
+                constants.crcSeed := io.cmd.bits.additionalData(23, 0)
+              }
+              is (BasebandISA.CONFIG_ACCESS_ADDRESS) {
+                constants.accessAddress := io.cmd.bits.additionalData
+              }
+              is (BasebandISA.CONFIG_CHANNEL_INDEX) {
+                constants.channelIndex := io.cmd.bits.additionalData(5, 0)
+              }
+              is (BasebandISA.CONFIG_ADDITIONAL_FRAME_SPACE) {
+                constants.additionalFrameSpace := io.cmd.bits.additionalData
+              }
+              is (BasebandISA.CONFIG_LOOPBACK_SELECT) {
+                constants.loopbackSelect := io.cmd.bits.additionalData
               }
             }
-            is(BasebandISA.SEND_CMD) {
-              cmd := io.cmd.bits
+          }
+          is (BasebandISA.SEND_CMD) {
+            cmd := io.cmd.bits
 
-              // When the disassembler is not working and the modem is not sending out data, we can try to send a new packet
-              // We don't check if the assembler is busy / ready becasue it should be covered by the fire in tx state
-              when (io.cmd.bits.rs2 > 1.U) {
-                //when (~io.basebandControl.disassembler.out.control.busy & ~io.modemControl.rx.out.busy) {
-                  io.basebandControl.assembler.in.valid := true.B
-                  io.basebandControl.assembler.in.bits.aa := constants.accessAddress
-                  io.basebandControl.assembler.in.bits.pduLength := io.cmd.bits.rs2 - 2.U
-                  // TODO: switch disassembler off
+            when (io.cmd.bits.inst.data > 1.U & io.cmd.bits.inst.data < 258.U) {
 
-                  state := s_tx
-               // }
-              }.otherwise {
-                io.interrupt.queue.bits := BasebandISA.INTERRUPT(BasebandISA.INTERRUPT_REASON_INVALID_TX_LENGTH)
-                state := s_interrupt
-              }
-
-
+              // TODO: Switch off chip mode
+              state := s_tx_waiting
+            }.otherwise {
+              // TODO: Send interrupt for illegal PDU width
             }
+          }
+          is (BasebandISA.RECEIVE_CMD) {
+            cmd := io.cmd.bits
+
+            // TODO: Check if legal address for write?
+            // TODO: Switch off chip mode
+            state := s_rx_waiting
           }
         }
       }
-      is (s_tx) {
-        when (!io.basebandControl.assembler.out.busy) { // & !io.modemControl.tx.busy) {
-          state := s_idle
-        }
+    }
+    is (s_tx_waiting) {
+      when (io.basebandControl.assembler.in.fire()) {
+        state := s_tx_active
       }
-      is (s_rx) {
+    }
+    is (s_tx_active) {
+      when (io.basebandControl.assembler.out.done) {
+        state := s_idle // TODO: Need waiting on modem state
+      }
+    }
+    is (s_rx_waiting) {
+      when(io.basebandControl.disassembler.in.fire()) {
+        state := s_rx_active
+      }
+    }
+    is (s_rx_active) {
+      when (io.basebandControl.disassembler.out.done) {
+        state := s_idle
+      }
+    }
+    is (s_debug_waiting) {
 
-      }
-      is (s_interrupt) {
-        // TODO: When interrupt queue fires to let us take up our message, then we are good to go
-        // when (io.interrupt.queue.fire()) {
-        //   state := s_idle
-        //   io.interrupt.signal := true.B
-        // }
-      }
+    }
+    is (s_interrupt) {
+      // TODO: When interrupt queue fires to let us take up our message, then we are good to go
+      // when (io.interrupt.queue.fire()) {
+      //   state := s_idle
+      //   io.interrupt.signal := true.B
+      // }
     }
   }
 }
