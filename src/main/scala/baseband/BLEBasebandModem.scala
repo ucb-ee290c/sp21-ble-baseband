@@ -249,9 +249,11 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
 
   val cmdQueue = Queue(basebandFrontend.module.io.back.cmd, params.cmdQueueDepth)
 
-  val controller = Module(new Controller(params.paddrBits, beatBytes))
+  cmdQueue.ready := false.B
 
-  controller.io.cmd <> cmdQueue
+  //val controller = Module(new Controller(params.paddrBits, beatBytes))
+
+  //controller.io.cmd <> cmdQueue
 }
 
 //class BLEBasebandModem(params: BLEBasebandModemParams)(implicit p: Parameters) extends LazyRoCC(opcodes = opcodes) {

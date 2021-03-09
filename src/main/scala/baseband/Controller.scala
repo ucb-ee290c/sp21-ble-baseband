@@ -10,13 +10,13 @@ import freechips.rocketchip.tile.{HasCoreParameters, RoCCCommand, XLen}
 
 import ee290cdma._
 
-class Controller(addrBits: Int, beatBytes: Int) extends Module {
+class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   val io = IO(new Bundle {
-    val basebandControl = Flipped(new BasebandControlIO(addrBits))
+    val basebandControl = Flipped(new BasebandControlIO(params.paddrBits))
     val cmd = Flipped(Decoupled(new BLEBasebandModemCommand))
     val constants = Output(new BasebandConstants) // TODO: Rename? Includes constants that will be used by modem too
     val dma = new Bundle {
-      val read = Decoupled(new EE290CDMAReaderReq(addrBits, 258)) // Controller only issues read requests, the baseband issues write requests
+      val read = Decoupled(new EE290CDMAReaderReq(params.paddrBits, params.maxReadSize)) // Controller only issues read requests, the baseband issues write requests
     }
   })
 
@@ -28,19 +28,19 @@ class Controller(addrBits: Int, beatBytes: Int) extends Module {
 
   io.constants := constants
 
-  val s_idle :: s_tx_waiting :: s_tx_active :: s_rx_waiting :: s_rx_active :: s_debug_waiting :: s_debug_active :: s_interrupt :: Nil = Enum(8)
+  val s_idle :: s_tx :: s_rx :: s_debug:: s_interrupt :: Nil = Enum(5)
+  val sub_idle :: sub_waiting :: sub_active :: sub_finished :: Nil = Enum(5)
 
   val state = RegInit(s_idle)
+  val subState = RegInit(sub_idle)
 
   val cmd = Reg(new BLEBasebandModemCommand)
 
   // Baseband control wires
   io.basebandControl.assembler.in.bits.aa := constants.accessAddress
-  io.basebandControl.assembler.in.bits.pduLength := io.cmd.bits.inst.data - 2.U
-  io.basebandControl.assembler.in.valid := state === s_tx_waiting | state === s_debug_waiting
+  io.basebandControl.assembler.in.bits.pduLength := cmd.inst.data - 2.U // TODO: Change this to be a reference to reg command
 
-  io.basebandControl.disassembler.in.bits.aa := constants.accessAddress
-  io.basebandControl.disassembler.in.valid := state === s_rx_waiting | state === s_debug_waiting
+  // TODO: Registers for ready and valids
 
   // Command wires
   io.cmd.ready := state === s_idle
@@ -70,46 +70,45 @@ class Controller(addrBits: Int, beatBytes: Int) extends Module {
           }
           is (BasebandISA.SEND_CMD) {
             cmd := io.cmd.bits
-
             when (io.cmd.bits.inst.data > 1.U & io.cmd.bits.inst.data < 258.U) {
-
               // TODO: Switch off chip mode
-              state := s_tx_waiting
+              state := s_rx
             }.otherwise {
               // TODO: Send interrupt for illegal PDU width
             }
           }
           is (BasebandISA.RECEIVE_CMD) {
             cmd := io.cmd.bits
-
-            // TODO: Check if legal address for write?
-            // TODO: Switch off chip mode
-            state := s_rx_waiting
+            when(io.cmd.bits.additionalData(1,0) === 0.U) { // Check address is byte aligned
+              // TODO: Switch off chip mode
+              state := s_rx
+            }.otherwise {
+              // TODO: Send misaligned address instruction
+            }
           }
         }
       }
     }
-    is (s_tx_waiting) {
+    is (s_tx) {
+      when (io.basebandControl.assembler.in.ready & io.dma.read.ready) {
+        //assembler_in_valid := true.B
+        //dma_in_valid := true.B
+      }
+
       when (io.basebandControl.assembler.in.fire()) {
-        state := s_tx_active
+        //assembler_in_valid := false.B
+      }
+
+      when (io.dma.read.fire()) {
+        //assembler_in_valid := false.B
       }
     }
-    is (s_tx_active) {
-      when (io.basebandControl.assembler.out.done) {
-        state := s_idle // TODO: Need waiting on modem state
-      }
-    }
-    is (s_rx_waiting) {
-      when(io.basebandControl.disassembler.in.fire()) {
-        state := s_rx_active
-      }
-    }
-    is (s_rx_active) {
+    is (s_rx) {
       when (io.basebandControl.disassembler.out.done) {
         state := s_idle
       }
     }
-    is (s_debug_waiting) {
+    is (s_debug) {
 
     }
     is (s_interrupt) {
