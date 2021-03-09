@@ -12,6 +12,7 @@ import ee290cdma._
 
 case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
+  paddrBits: Int = 32,
   maxReadSize: Int = 258,
   cmdQueueDepth: Int = 4,
   modemQueueDepth: Int = 128)
@@ -26,8 +27,12 @@ class BLEBasebandModemAnalogIO extends Bundle {
 }
 
 class BLEBasebandModemCommand extends Bundle {
-  val inst = UInt(32.W)
-  val data = UInt(32.W)
+  val inst = new Bundle {
+    val primaryInst = UInt(4.W)
+    val secondaryInst = UInt(4.W)
+    val data = UInt(24.W)
+  }
+  val additionalData = UInt(32.W)
 }
 
 class BLEBasebandModemStatus extends Bundle {
@@ -53,13 +58,15 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   // Instruction from processor
   val inst = Wire(new DecoupledIO(UInt(32.W)))
-  val data = Reg(UInt(32.W))
+  val additionalData = Reg(UInt(32.W))
 
   // Writing to the instruction triggers the command to be valid.
   // So if you wish to set data you write that first then write inst
   inst.ready := io.back.cmd.ready
-  io.back.cmd.bits.data := data
-  io.back.cmd.bits.inst := inst.bits
+  io.back.cmd.bits.additionalData := additionalData
+  io.back.cmd.bits.inst.primaryInst := inst.bits(3, 0)
+  io.back.cmd.bits.inst.secondaryInst := inst.bits(7, 4)
+  io.back.cmd.bits.inst.data := inst.bits(31, 8)
   io.back.cmd.valid := inst.valid
 
   // Status regs
@@ -157,7 +164,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   regmap(
     0x00 -> Seq(RegField.w(32, inst)), // Command start
-    0x04 -> Seq(RegField.w(32, data)),
+    0x04 -> Seq(RegField.w(32, additionalData)),
     0x08 -> Seq(RegField.r(32, status0)), // Status start
     0x0C -> Seq(RegField.r(32, status1)),
     0x10 -> Seq(RegField.r(32, status2)),
@@ -230,10 +237,10 @@ class BLEBasebandModem(params: BLEBasebandModemParams, beatBytes: Int)(implicit 
 
   basebandFrontend.node := mmio
 
-  lazy val module = new BLEBasebandModemImp(params,this)
+  lazy val module = new BLEBasebandModemImp(params, beatBytes,this)
 }
 
-class BLEBasebandModemImp(params: BLEBasebandModemParams, outer: BLEBasebandModem) extends LazyModuleImp(outer) {
+class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer: BLEBasebandModem)(implicit p: Parameters) extends LazyModuleImp(outer) {
   val io = dontTouch(IO(new BLEBasebandModemAnalogIO))
 
   import outer._
@@ -243,6 +250,10 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, outer: BLEBasebandMode
   val cmdQueue = Queue(basebandFrontend.module.io.back.cmd, params.cmdQueueDepth)
 
   cmdQueue.ready := false.B
+
+  //val controller = Module(new Controller(params.paddrBits, beatBytes))
+
+  //controller.io.cmd <> cmdQueue
 }
 
 //class BLEBasebandModem(params: BLEBasebandModemParams)(implicit p: Parameters) extends LazyRoCC(opcodes = opcodes) {

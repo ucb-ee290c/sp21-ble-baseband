@@ -187,11 +187,16 @@ class PacketDisassembler extends Module {
     }
 
     when (counter === 1.U && out_fire) {
-      state := s_pdu_payload
       counter := 0.U
       counter_byte := 0.U
       in_ready := true.B
       out_valid := false.B
+
+      when (data.asUInt() =/= 0.U) {
+        state := s_pdu_payload
+      }.otherwise { /// If we have a zero width PDU skip payload body
+        state := s_crc
+      }
 
       // Capture length field of PDU header
       length := data.asUInt()
