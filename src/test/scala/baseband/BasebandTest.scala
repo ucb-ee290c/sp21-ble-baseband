@@ -21,10 +21,14 @@ class BasebandLoopback(addrBits: Int, beatBytes: Int) extends Module {
 
   baseband.io.constants := io.constants
 
-  baseband.io.modem.rx <> baseband.io.modem.tx
+  baseband.io.loopback := true.B
+
+  baseband.io.modem.rx <> DontCare
+  baseband.io.modem.tx <> DontCare
 
   io.modem.rx <> DontCare
   io.modem.tx <> DontCare
+  io.loopback := DontCare
 
 }
 
@@ -101,7 +105,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
           .zip(expectedOut)
           .foreach {
             case (o, e) =>
-              assert(o.data.litValue === e.data.litValue)
+              assert(o.data.litValue == e.data.litValue)
               assert(o.totalBytes.litValue == e.totalBytes.litValue)
               assert(o.addr.litValue == e.addr.litValue)
           }
@@ -166,7 +170,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
           .zip(expectedOut)
           .foreach {
             case (o, e) =>
-              assert(o.data.litValue === e.data.litValue)
+              assert(o.data.litValue == e.data.litValue)
               assert(o.totalBytes.litValue == e.totalBytes.litValue)
               assert(o.addr.litValue == e.addr.litValue)
           }
@@ -232,7 +236,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
           .zip(expectedOut)
           .foreach {
             case (o, e) =>
-              assert(o.data.litValue === e.data.litValue)
+              assert(o.data.litValue == e.data.litValue)
               assert(o.totalBytes.litValue == e.totalBytes.litValue)
               assert(o.addr.litValue == e.addr.litValue)
           }
@@ -297,7 +301,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
           .zip(expectedOut)
           .foreach {
             case (o, e) =>
-              assert(o.data.litValue === e.data.litValue)
+              assert(o.data.litValue == e.data.litValue)
               assert(o.totalBytes.litValue == e.totalBytes.litValue)
               assert(o.addr.litValue == e.addr.litValue)
           }
@@ -363,7 +367,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
           .zip(expectedOut)
           .foreach {
             case (o, e) =>
-              assert(o.data.litValue === e.data.litValue)
+              assert(o.data.litValue == e.data.litValue)
               assert(o.totalBytes.litValue == e.totalBytes.litValue)
               assert(o.addr.litValue == e.addr.litValue)
           }

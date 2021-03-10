@@ -58,7 +58,7 @@ class DecoupledLoopback[T <: Data](gen: T) extends Module {
     io.left.out <> io.left.in
     io.right.out.valid := false.B
     io.right.in.ready := false.B
-    io.right.out.bits := 0.U
+    io.right.out.bits := DontCare
   }.otherwise {
     io.left.out <> io.right.in
     io.right.out <> io.left.in

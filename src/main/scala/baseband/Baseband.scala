@@ -6,6 +6,7 @@ import chisel3.experimental._
 import freechips.rocketchip.config.Parameters
 
 import ee290cdma._
+import modem._
 
 class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
@@ -20,16 +21,19 @@ class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {
   val writeReq = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
 }
 
-class BasebandControlIO(addrBits: Int) extends Bundle {
-  val assembler = new Bundle {
-    val in = Flipped(Decoupled(new PAControlInputBundle))
-    val out = Output(new PAControlOutputBundle)
-  }
-  val disassembler = new Bundle {
-    val in = Flipped(Decoupled(new PDAControlInputBundle))
-    val out = Output(new PDAControlOutputBundle)
-  }
+class AssemblerControlIO extends Bundle {
+  val in = Flipped(Decoupled(new PAControlInputBundle))
+  val out = Output(new PAControlOutputBundle)
+}
 
+class DisassemblerControlIO extends Bundle {
+  val in = Flipped(Decoupled(new PDAControlInputBundle))
+  val out = Output(new PDAControlOutputBundle)
+}
+
+class BasebandControlIO(addrBits: Int) extends Bundle {
+  val assembler = new AssemblerControlIO
+  val disassembler = new DisassemblerControlIO
   val baseAddr = Flipped(Valid(UInt(addrBits.W)))
 }
 
@@ -78,6 +82,7 @@ class BasebandIO(val addrBits: Int, val beatBytes: Int) extends Bundle {
   val control = new BasebandControlIO(addrBits)
   val dma = new BasebandDMAIO(addrBits, beatBytes)
   val modem = Flipped(new GFSKModemDigitalIO)
+  val loopback = Input(Bool())
 }
 
 class Baseband(addrBits: Int, beatBytes: Int) extends Module {
@@ -93,7 +98,6 @@ class Baseband(addrBits: Int, beatBytes: Int) extends Module {
   assembler.io.in.data <> dmaPacketDisassembler.io.consumer.data
   assembler.io.in.control <> io.control.assembler.in
 
-  io.modem.tx <> assembler.io.out.data
   io.control.assembler.out <> assembler.io.out.control
 
 
@@ -103,7 +107,6 @@ class Baseband(addrBits: Int, beatBytes: Int) extends Module {
   dmaPacketAssembler.io.producer.data <> disassembler.io.out.data
 
   disassembler.io.constants := io.constants
-  disassembler.io.in.data <> io.modem.rx
   disassembler.io.in.control <> io.control.disassembler.in
 
   io.control.disassembler.out <> disassembler.io.out.control
@@ -113,4 +116,11 @@ class Baseband(addrBits: Int, beatBytes: Int) extends Module {
   dmaAddresser.io.in <> dmaPacketAssembler.io.dmaOut
   dmaAddresser.io.baseAddr <> io.control.baseAddr
   io.dma.writeReq <> dmaAddresser.io.out
+
+  val loopback = Module(new DecoupledLoopback(UInt(1.W)))
+  loopback.io.select := io.loopback
+  loopback.io.left.in <> assembler.io.out.data
+  io.modem.tx <> loopback.io.right.out
+  loopback.io.right.in <> io.modem.rx
+  disassembler.io.in.data <> loopback.io.left.out
 }

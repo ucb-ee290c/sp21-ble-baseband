@@ -11,7 +11,7 @@ class GenericDelayChainIO[T<:Data](t: T) extends Bundle {
 class GenericDelayChain[T<:Data](cycles: Int, t: T) extends Module {
   val io = IO(new GenericDelayChainIO(t))
 
-  val delayRegisters = Seq.fill(cycles) { Module( new GenericDelayChainCell(t).io ) }
+  val delayRegisters = Seq.fill(cycles) {Module(new GenericDelayChainCell(t)).io}
 
   delayRegisters.head.in := io.in
 

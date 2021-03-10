@@ -9,21 +9,23 @@ import freechips.rocketchip.regmapper.{HasRegMap, RegField, RegisterWriteIO}
 import freechips.rocketchip.tilelink.{TLIdentityNode, TLRegBundle, TLRegModule, TLRegisterRouter}
 
 import ee290cdma._
+import modem._
 
 case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
   paddrBits: Int = 32,
   maxReadSize: Int = 258,
+  adcBits: Int = 5,
+  adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
   modemQueueDepth: Int = 128)
 
 case object BLEBasebandModemKey extends Field[Option[BLEBasebandModemParams]](None)
 
-class BLEBasebandModemAnalogIO extends Bundle {
-  val modemClock = Input(Clock())
+class BLEBasebandModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
   val offChipMode = Output(Bool())
-  val data = new GFSKModemAnalogIO
-  val tuning = Output(new GFSKModemTuningIO)
+  val data = new modem.GFSKModemAnalogIO(params)
+  val tuning = Output(new modem.GFSKModemTuningIO)
 }
 
 class BLEBasebandModemCommand extends Bundle {
@@ -241,7 +243,7 @@ class BLEBasebandModem(params: BLEBasebandModemParams, beatBytes: Int)(implicit 
 }
 
 class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer: BLEBasebandModem)(implicit p: Parameters) extends LazyModuleImp(outer) {
-  val io = dontTouch(IO(new BLEBasebandModemAnalogIO))
+  val io = dontTouch(IO(new BLEBasebandModemAnalogIO(params)))
 
   import outer._
 

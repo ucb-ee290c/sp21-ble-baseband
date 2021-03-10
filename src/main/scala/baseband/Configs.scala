@@ -16,7 +16,7 @@ trait CanHavePeripheryBLEBasebandModem { this: BaseSubsystem =>
     ibus.fromSync := baseband.intnode
 
     val io = InModuleBody {
-      val io = IO(new BLEBasebandModemAnalogIO).suggestName("baseband")
+      val io = IO(new BLEBasebandModemAnalogIO(params)).suggestName("baseband")
       io <> baseband.module.io
       io
     }

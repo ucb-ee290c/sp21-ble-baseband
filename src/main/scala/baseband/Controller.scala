@@ -9,6 +9,17 @@ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp, LazyModuleImpL
 import freechips.rocketchip.tile.{HasCoreParameters, RoCCCommand, XLen}
 
 import ee290cdma._
+import modem._
+
+class TXChainController(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
+  val io = IO(new Bundle {
+    val assemblerControl = Flipped(new AssemblerControlIO)
+    val constants = Input(new BasebandConstants)
+  })
+
+  val s_idle :: s_waiting :: Nil = Enum(3)
+  val state = RegInit(s_idle)
+}
 
 class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   val io = IO(new Bundle {
@@ -29,10 +40,8 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   io.constants := constants
 
   val s_idle :: s_tx :: s_rx :: s_debug:: s_interrupt :: Nil = Enum(5)
-  val sub_idle :: sub_waiting :: sub_active :: sub_finished :: Nil = Enum(5)
 
   val state = RegInit(s_idle)
-  val subState = RegInit(sub_idle)
 
   val cmd = Reg(new BLEBasebandModemCommand)
 
@@ -90,18 +99,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
       }
     }
     is (s_tx) {
-      when (io.basebandControl.assembler.in.ready & io.dma.read.ready) {
-        //assembler_in_valid := true.B
-        //dma_in_valid := true.B
-      }
 
-      when (io.basebandControl.assembler.in.fire()) {
-        //assembler_in_valid := false.B
-      }
-
-      when (io.dma.read.fire()) {
-        //assembler_in_valid := false.B
-      }
     }
     is (s_rx) {
       when (io.basebandControl.disassembler.out.done) {

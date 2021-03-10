@@ -22,19 +22,29 @@ object BasebandISA {
   val CONFIG_LOOPBACK_SELECT = 5.U
 
   /* Send command:
-      Transmit a specified number of PDU header and data bytes
+      Transmit a specified number of PDU header and data bytes. Bytes are gathered by loading them from the
+      specified address
       [ Data = <total bytes> | secondaryInst = X | primaryInst = 1 ]
-      [ additionalData = x ]
+      [ additionalData = <load address> ]
    */
   val SEND_CMD = 1.U
 
   /* Send command:
       Place the device into receive mode. If a message is picked up, it will be stored starting at
       the specified storage address.
-      [ Data = <total bytes> | secondaryInst = X | primaryInst = 2 ]
+      [ Data = X | secondaryInst = X | primaryInst = 2 ]
       [ additionalData = <storage address> ]
  */
   val RECEIVE_CMD = 2.U
+
+  /* Debug command:
+      Turns on both the RX and TX paths according to the loopback mask and passes the specified number of PDU
+      header and data bytes in a loop. For simplicity the return data is stored at <load address + total bytes>,
+      rounded to the nearest byte aligned address.
+      [ Data = <total bytes> | secondaryInst = <loopback mask> | primaryInst = 15 ]
+      [ additionalData = <load address> ]
+   */
+  val DEBUG_CMD = 15.U
 
   // Interrupt reason codes
   val INTERRUPT_REASON_INVALID_TX_LENGTH = 0
