@@ -72,7 +72,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
         c.io.in.q.valid.poke((i < mock_input_I.length).asBool())
         c.io.in.i.valid.poke((i < mock_input_I.length).asBool())
         c.clock.step()
-       // if (c.io.out.data.valid.peek().litToBoolean)
+       if (c.io.out.data.valid.peek().litToBoolean)
           arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
         i+=1
       }
