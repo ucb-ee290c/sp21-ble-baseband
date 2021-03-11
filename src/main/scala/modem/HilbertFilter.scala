@@ -1,7 +1,7 @@
 package modem
 
 
-import baseband.PDAControlInputBundle
+import baseband.{BLEBasebandModemParams, PDAControlInputBundle}
 import chisel3._
 import chisel3.experimental.FixedPoint
 import chisel3.util._
@@ -13,29 +13,22 @@ class HilbertFilterControlInput extends Bundle {
   val combineOperation = UInt(1.W)
 }
 
-class QuadratureSignalsInput(bitWidth: Int) extends Bundle {
-  val I = Input(UInt(bitWidth.W))
-  val Q = Input(UInt(bitWidth.W))
-}
-
-class HilbertFilterInput(bitWidth: Int) extends Bundle {
-  val control = Input(new HilbertFilterControlInput)
-  val signals = Flipped(Decoupled(new QuadratureSignalsInput(bitWidth)))
-}
-
 class HilbertFilterOutput(bitWidth: Int) extends Bundle {
   val data = Decoupled(UInt(bitWidth.W))
 }
 
-class HilbertFilterIO(bitWidth: Int) extends Bundle {
-  val in = new HilbertFilterInput(bitWidth)
-  val out = new HilbertFilterOutput(bitWidth)
+class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
+  val in = new AnalogRXIO(params)
+  val out = new HilbertFilterOutput(params.adcBits + 2)
 }
 
 
 
-class HilbertFilter() extends Module {
-  var io = IO(new HilbertFilterIO(12))
+class HilbertFilter(params: BLEBasebandModemParams) extends Module {
+  var io = IO(new HilbertFilterIO(params))
+
+  val I_scaled = Wire(SInt((params.adcBits + 1).W))
+  val Q_scaled = Wire(SInt((params.adcBits + 1).W))
 
   var coeffs = Seq[Double](0.0,
   0.0,
@@ -67,17 +60,16 @@ class HilbertFilter() extends Module {
   0.0,
   0.0).map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
   // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
-  io.in.signals.bits.I.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
-  io.in.signals.bits.Q.asFixedPoint(0.BP)
-  val I_delay = Module (new GenericDelayChain(coeffs.length / 2, io.in.signals.bits.I))
+  io.in.i.data.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
+  val I_delay = Module (new GenericDelayChain(coeffs.length / 2, SInt((params.adcBits + 1).W)))
+  I_scaled := io.in.i.data
+  I_delay.io.in.valid :=  io.in.i.valid
+  I_delay.io.in.bits := I_scaled - 15.S((params.adcBits + 1).W)
+  var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(24.W, 11.BP), coeffs) )
+  fir.io.in.valid := io.in.q.valid
+  fir.io.in.bits := io.in.q.data
 
-  //var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(24.W, 11.BP), coeffs) )
-  I_delay.io.in.valid :=  io.in.signals.valid
-  I_delay.io.in.bits := io.in.signals.bits.I
-
- // fir.io.in.valid := io.in.signals.valid
- // fir.io.in.bits := io.in.signals.bits.I
-
-  io.out.data <> I_delay.io.out
-
+  Q_scaled := fir.io.out.bits.asSInt() >>> fir.io.out.bits.binaryPoint
+  io.out.data.valid := I_delay.io.out.valid & fir.io.out.valid
+  io.out.data.bits := I_delay.io.out.bits - Q_scaled
 }

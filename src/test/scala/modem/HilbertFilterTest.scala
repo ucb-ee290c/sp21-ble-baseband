@@ -1,5 +1,6 @@
 package modem
 
+import baseband.BLEBasebandModemParams
 import modem.HilbertFilter
 import breeze.linalg.DenseVector
 import chisel3.UInt
@@ -27,8 +28,8 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   val time_interval = 0.0000001
   val digital_clock_F = 20 * MHz
 
-  val mock_input_I = (0, 0, 0, 0, 0, 2, 5, 9, 9, 3, -5, -13, -13, -4, 7, 16, 14, 3, -9, -16, -13, -3, 9, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15)
-  val mock_input_Q = (0, 0, 0, 0, 0, 0, 0, 1, 6, 10, 11, 4, -6, -14, -14, -4, 8, 16, 14, 3, -9, -16, -13, -2, 9, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3)
+  val mock_input_I = Array(15, 15, 15, 15, 15, 16, 16, 14, 9, 5, 5, 11, 21, 29, 28, 19, 7, 0, 2, 12, 24, 30, 28, 18, 7, 0, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19)
+  val mock_input_Q = Array(15, 15, 15, 15, 15, 13, 10, 6, 6, 11, 21, 28, 28, 20, 8, 0, 2, 12, 24, 30, 28, 18, 7, 0, 3, 12, 23, 30, 27, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 0, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 3, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 18, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 12, 23, 30, 28, 19, 7, 1, 2, 11, 23, 30, 28, 19, 7, 1, 2, 11, 23, 30, 28, 19, 7, 1)
 
   def lowpass(order: Int, sampleFrequency: Double, cutoffFrequency: Double): DenseVector[Double] => DenseVector[Double] = {
     return (x: DenseVector[Double]) => {filterLP(data = x, omega = cutoffFrequency, sampleRate = sampleFrequency )(CanFilterLPHP.dvDouble1DFilterLPHP)}
@@ -61,10 +62,22 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 */
 
   it should "Do something" in {
-    test(new HilbertFilter()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      print(mock_input_I)
-      print(mock_input_Q)
-      c.clock.step()
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.in.i.valid.poke(true.B)
+      val arr = Seq[BigInt]()
+      var i = 0
+      while (i < mock_input_I.length || c.io.out.data.valid.peek().litToBoolean) {
+        c.io.in.i.data.poke(mock_input_I(i).asUInt())
+        c.io.in.q.data.poke(mock_input_Q(i).asUInt())
+        c.io.in.q.valid.poke((i < mock_input_I.length).asBool())
+        c.io.in.i.valid.poke((i < mock_input_I.length).asBool())
+        c.clock.step()
+        if (c.io.out.data.valid.peek().litToBoolean)
+          arr ++ Seq(c.io.out.data.bits.peek().litValue())
+        i+=1
+      }
+      print("finished")
+      print(arr)
       assert(true)
     }
   }

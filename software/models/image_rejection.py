@@ -77,15 +77,15 @@ def mix(signal):
         return signal(t) * np.sin(2 * pi * F_LO * t)
     return I, Q
     
-def quantize(s):
-    return int(s * 32)#TODO
+def quantize(s, scale, range):
+    return int((s - scale) / range * 31)#TODO
     
 def ADC_sampling(sig, F_sample, OLD_F_sample):
     """
         Takes in signals `I` & `Q` sampled at `OLD_F_sample` and resamples them at a new sampling
     frequency `F_sample`.
     """
-    sig_sampled = [quantize(s) for s in sig[::int(OLD_F_sample//F_sample)]] # resample & quantize I
+    sig_sampled = [quantize(s, min(sig), max(sig) - min(sig)) for s in sig[::int(OLD_F_sample//F_sample)]] # resample & quantize I
     num_samples = int(F_sample * t_interval) # determine the number of samples in the time interval
     max_valid_sample = min(num_samples, len(sig_sampled))
     results = np.linspace(0, t_interval, num_samples)[:max_valid_sample], sig_sampled[:max_valid_sample] # remove extraneous elements
@@ -109,21 +109,21 @@ def hilbert_transform(Q):
     return result
 
 t = np.linspace(0, t_interval, num = int(analog_F_sample *t_interval))
-I, Q = mix(lambda t: IM(t))
+I, Q = mix(lambda t: RF(t))
 I, Q = I(t), Q(t)
 I, Q = analog_lowpass(I, Q)
 result = ADC_sampling(I, MHz(20), analog_F_sample)
+print(result[1])
 t = result[0]
-I = result[1]
+I = [s - 15 for s in result[1]]
 result = ADC_sampling(Q, MHz(20), analog_F_sample)
-Q = result[1]
-print(Q)
+Q = [s - 15 for s in result[1]]
 I = [FixedPoint(s, True, 6, 0) for s in I]
 Q = [FixedPoint(s, True, 6, 0) for s in Q]
 
 ht = hilbert_transform(Q)
-#plt.plot(t, ht)
-#plt.plot(t, Q)
+plt.plot(t, ht)
+plt.plot(t, Q)
 plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
 #print([I[t] - ht[t] for t in range(len(t))])
 #plt.plot(t, I)
