@@ -117,7 +117,7 @@ t = result[0]
 I = result[1]
 result = ADC_sampling(Q, MHz(20), analog_F_sample)
 Q = result[1]
-
+print(Q)
 I = [FixedPoint(s, True, 6, 0) for s in I]
 Q = [FixedPoint(s, True, 6, 0) for s in Q]
 

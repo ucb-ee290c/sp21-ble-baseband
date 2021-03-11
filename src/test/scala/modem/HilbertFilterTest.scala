@@ -24,9 +24,11 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   val F_LO = F_RF - F_IF
   val F_IM = F_LO - F_IF
   val analog_F_sample = (F_LO * 2 + F_IF) * 2
-  val time_interval = 0.00001
+  val time_interval = 0.0000001
   val digital_clock_F = 20 * MHz
 
+  val mock_input_I = (0, 0, 0, 0, 0, 2, 5, 9, 9, 3, -5, -13, -13, -4, 7, 16, 14, 3, -9, -16, -13, -3, 9, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15)
+  val mock_input_Q = (0, 0, 0, 0, 0, 0, 0, 1, 6, 10, 11, 4, -6, -14, -14, -4, 8, 16, 14, 3, -9, -16, -13, -2, 9, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3, 8, 15, 13, 3, -8, -15, -13, -3)
 
   def lowpass(order: Int, sampleFrequency: Double, cutoffFrequency: Double): DenseVector[Double] => DenseVector[Double] = {
     return (x: DenseVector[Double]) => {filterLP(data = x, omega = cutoffFrequency, sampleRate = sampleFrequency )(CanFilterLPHP.dvDouble1DFilterLPHP)}
@@ -48,7 +50,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   def sinSignal(frequency: Double, phaseOffset: Double = 0): (Double) => Double = {
     return {(t: Double) => math.sin(2 * math.Pi * frequency * t + phaseOffset)}
   }
-
+/*
   val t = timeSequence(time_interval, analog_F_sample)
   val RF = cosSignal(F_RF)
   val IM = cosSignal(F_IM)
@@ -56,12 +58,14 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   var Q = lowpass(5, analog_F_sample, 3.5 * MHz)( DenseVector(t.map(t => RF(t) * cosSignal(F_LO)(t)).toArray))
   var sampled_I = I.toArray.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
   var sampled_Q = Q.toArray.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
-
+*/
 
   it should "Do something" in {
     test(new HilbertFilter()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      print(sampled_I)
-      print(sampled_Q)
+      print(mock_input_I)
+      print(mock_input_Q)
+      c.clock.step()
+      assert(true)
     }
   }
 }

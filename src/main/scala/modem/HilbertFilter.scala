@@ -14,8 +14,8 @@ class HilbertFilterControlInput extends Bundle {
 }
 
 class QuadratureSignalsInput(bitWidth: Int) extends Bundle {
-  val I = UInt(bitWidth.W)
-  val Q = UInt(bitWidth.W)
+  val I = Input(UInt(bitWidth.W))
+  val Q = Input(UInt(bitWidth.W))
 }
 
 class HilbertFilterInput(bitWidth: Int) extends Bundle {
@@ -69,7 +69,7 @@ class HilbertFilter() extends Module {
   // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
   io.in.signals.bits.I.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
   io.in.signals.bits.Q.asFixedPoint(0.BP)
-  val I_delay = Module (new GenericDelayChain(coeffs.length / 2, io.in.signals.bits.I.cloneType))
+  val I_delay = Module (new GenericDelayChain(coeffs.length / 2, io.in.signals.bits.I))
 
   //var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(24.W, 11.BP), coeffs) )
   I_delay.io.in.valid :=  io.in.signals.valid
