@@ -5,6 +5,7 @@ import chisel3.UInt
 import chiseltest.ChiselScalatestTester
 import chiseltest.internal.{TreadleBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
+import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
 import scala.math
 
@@ -22,16 +23,13 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   val digital_clock_F = 20 * MHz
 
   def butterLowpass(order: Int, sampleFrequency: Double, cutoffFrequency: Double): List[Double] => Seq[Double] = {
-    /*
+
     val (b, a) = new TransferFunctionBuilder()
       .butterworthApproximation(order)  // The order of Butterworth filter
       .digitalize(sampleFrequency)  // digital filter with sampling rate at 30 Hz
       .transformToLowPass(cutoffFrequency) // Low-pass filter with cutoff frequency 3.5Hz
       .coefficients
     return (x: List[Double]) => {filterForward(b, a, x)}
-
-     */
-    return {x => Seq()}
   }
 
   def timeSequence(duration: Double, frequency: Double): Seq[Double] = {
