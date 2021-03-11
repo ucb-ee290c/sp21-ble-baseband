@@ -64,17 +64,16 @@ class HilbertFilter(addrBits: Int, beatBytes: Int)(implicit p: Parameters) exten
   -0.002,
   0.0,
   0.0,
-  0.0).map(c => FixedPoint.fromDouble(c, 8.W, 3.BP))
+  0.0).map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
   // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
   io.in.signals.bits.I.asFixedPoint(3.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
   io.in.signals.bits.Q.asFixedPoint(3.BP)
   val I_delay = Module (new GenericDelayChain(coeffs.length / 2, io.in.signals.bits.I.cloneType))
+  var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(25.W, 11.BP), coeffs) )
 
-  io.in.signals.valid := I_delay.io.in.valid
-  io.in.signals.bits.I := I_delay.io.in.bits
+  I_delay.io.in.valid :=  io.in.signals.valid
+  I_delay.io.in.bits := io.in.signals.bits.I
 
   io.out.data <> I_delay.io.out
 
-
-  //var fir = Module( new GenericFIR(FixedPoint(8.W, 3.BP), FixedPoint(8.W, 3.BP), coeffs) )
 }

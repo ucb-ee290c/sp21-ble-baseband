@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from fixedpoint import FixedPoint
 from scipy.signal import butter, lfilter
 from scipy import signal
 from numpy import pi
 from scipy.fft import fft, fftfreq, fftshift
+import fixedpoint
 import math
 
 # Constants
@@ -26,11 +28,12 @@ https://www.wirelessinnovation.org/assets/Proceedings/2011/2011-1b-carrick.pdf
 """
 
 HB_coeff = [2 * np.sin(i * pi / 2) * HB_coeff[i] for i in range(0, len(HB_coeff))]
-print(HB_coeff)
+#print(HB_coeff)
 
-HB_coeff = [0.0, 0.0, 0.0, 0.002, 0.0, 0.008, 0.0, 0.026, 0.0, 0.068, 0.0, 0.17, 0.0, 0.6212, 0.0, -0.6212, 0.0, -0.17, 0.0, -0.068, 0.0, -0.026, 0.0, -0.008, 0.0, -0.002, 0.0, 0.0, 0.0]
+#HB_coeff = [0.0, 0.0, 0.0, 0.002, 0.0, 0.008, 0.0, 0.026, 0.0, 0.068, 0.0, 0.17, 0.0, 0.6212, 0.0, -0.6212, 0.0, -0.17, 0.0, -0.068, 0.0, -0.026, 0.0, -0.008, 0.0, -0.002, 0.0, 0.0, 0.0]
 
-
+HB_coeff = [FixedPoint(c, True, 1, 10) for c in HB_coeff]
+print([c.__float__() for c in HB_coeff])
 def butter_lowpass(cutoff, fs, order=5):
     sos = signal.butter(10, cutoff, 'lp', fs=fs, output='sos')
     return sos
@@ -75,7 +78,7 @@ def mix(signal):
     return I, Q
     
 def quantize(s):
-    return int(s * 32) + 15 #TODO
+    return int(s * 32)#TODO
     
 def ADC_sampling(sig, F_sample, OLD_F_sample):
     """
@@ -106,7 +109,7 @@ def hilbert_transform(Q):
     return result
 
 t = np.linspace(0, t_interval, num = int(analog_F_sample *t_interval))
-I, Q = mix(lambda t: RF(t))
+I, Q = mix(lambda t: IM(t))
 I, Q = I(t), Q(t)
 I, Q = analog_lowpass(I, Q)
 result = ADC_sampling(I, MHz(20), analog_F_sample)
@@ -114,10 +117,14 @@ t = result[0]
 I = result[1]
 result = ADC_sampling(Q, MHz(20), analog_F_sample)
 Q = result[1]
+
+I = [FixedPoint(s, True, 6, 0) for s in I]
+Q = [FixedPoint(s, True, 6, 0) for s in Q]
+
 ht = hilbert_transform(Q)
 #plt.plot(t, ht)
 #plt.plot(t, Q)
-plt.plot(t, [I[t] - ht[t] for t in range(len(t))])
-print([I[t] - ht[t] for t in range(len(t))])
+plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
+#print([I[t] - ht[t] for t in range(len(t))])
 #plt.plot(t, I)
 plt.show()
