@@ -7,7 +7,7 @@ import chisel3.experimental.FixedPoint
 import chisel3.util._
 import firrtl.ir.Width
 import freechips.rocketchip.config.Parameters
-import chipyard.example.dsptools.GenericFIR
+import chipyard.example.GenericFIR
 
 class HilbertFilterControlInput extends Bundle {
   val combineOperation = UInt(1.W)
@@ -76,7 +76,7 @@ class HilbertFilter() extends Module {
   I_delay.io.in.bits := io.in.signals.bits.I
 
   fir.io.in.valid := io.in.signals.valid
-  fir.io.in.data := io.in.signals.bits.I
+  fir.io.in.bits := io.in.signals.bits.I
 
   io.out.data <> I_delay.io.out
 
