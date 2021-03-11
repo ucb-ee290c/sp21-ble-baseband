@@ -1,12 +1,12 @@
 package modem
 
+import baseband.BLEBasebandModemParams
+import chisel3.UInt
 import chiseltest.ChiselScalatestTester
+import chiseltest.internal.{TreadleBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.math
-import net.sparja.syto._
-import net.sparja.syto.filter.TransferFunctionBuilder
-import net.sparja.syto.filter.filterForward
 
 class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 
@@ -22,12 +22,16 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   val digital_clock_F = 20 * MHz
 
   def butterLowpass(order: Int, sampleFrequency: Double, cutoffFrequency: Double): List[Double] => Seq[Double] = {
+    /*
     val (b, a) = new TransferFunctionBuilder()
       .butterworthApproximation(order)  // The order of Butterworth filter
       .digitalize(sampleFrequency)  // digital filter with sampling rate at 30 Hz
       .transformToLowPass(cutoffFrequency) // Low-pass filter with cutoff frequency 3.5Hz
       .coefficients
     return (x: List[Double]) => {filterForward(b, a, x)}
+
+     */
+    return {x => Seq()}
   }
 
   def timeSequence(duration: Double, frequency: Double): Seq[Double] = {
@@ -56,4 +60,9 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   Q = Q.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
 
 
+  it should "Fuzz Delay Chain" in {
+    test(new HilbertFilter()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.clock.step(10)
+    }
+  }
 }

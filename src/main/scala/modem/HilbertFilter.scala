@@ -7,6 +7,7 @@ import chisel3.experimental.FixedPoint
 import chisel3.util._
 import firrtl.ir.Width
 import freechips.rocketchip.config.Parameters
+import chipyard.example.dsptools.GenericFIR
 
 class HilbertFilterControlInput extends Bundle {
   val combineOperation = UInt(1.W)
@@ -33,8 +34,8 @@ class HilbertFilterIO(bitWidth: Int) extends Bundle {
 
 
 
-class HilbertFilter(addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends Module {
-  var io = IO(new HilbertFilterIO(5))
+class HilbertFilter() extends Module {
+  var io = IO(new HilbertFilterIO(12))
 
   var coeffs = Seq[Double](0.0,
   0.0,
@@ -66,13 +67,16 @@ class HilbertFilter(addrBits: Int, beatBytes: Int)(implicit p: Parameters) exten
   0.0,
   0.0).map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
   // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
-  io.in.signals.bits.I.asFixedPoint(3.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
-  io.in.signals.bits.Q.asFixedPoint(3.BP)
+  io.in.signals.bits.I.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
+  io.in.signals.bits.Q.asFixedPoint(0.BP)
   val I_delay = Module (new GenericDelayChain(coeffs.length / 2, io.in.signals.bits.I.cloneType))
-  var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(25.W, 11.BP), coeffs) )
 
+  var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(24.W, 11.BP), coeffs) )
   I_delay.io.in.valid :=  io.in.signals.valid
   I_delay.io.in.bits := io.in.signals.bits.I
+
+  fir.io.in.valid := io.in.signals.valid
+  fir.io.in.data := io.in.signals.bits.I
 
   io.out.data <> I_delay.io.out
 
