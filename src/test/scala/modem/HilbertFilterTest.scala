@@ -1,8 +1,11 @@
 package modem
 
-import baseband.BLEBasebandModemParams
+import modem.HilbertFilter
 import breeze.linalg.DenseVector
 import chisel3.UInt
+import chisel3._
+import chiseltest._
+import chiseltest.experimental.TestOptionBuilder._
 import chiseltest.ChiselScalatestTester
 import chiseltest.internal.{TreadleBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -55,7 +58,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   var sampled_Q = Q.toArray.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
 
 
-  it should "Fuzz Delay Chain" in {
+  it should "Do something" in {
     test(new HilbertFilter()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       print(sampled_I)
       print(sampled_Q)
