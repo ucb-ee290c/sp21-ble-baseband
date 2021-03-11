@@ -1,11 +1,13 @@
 package modem
 
 import baseband.BLEBasebandModemParams
+import breeze.linalg.DenseVector
 import chisel3.UInt
 import chiseltest.ChiselScalatestTester
 import chiseltest.internal.{TreadleBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
-import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
+import breeze.signal.{designFilterFirwin, filterLP}
+import breeze.signal.support.CanFilterLPHP
 
 import scala.math
 
@@ -22,14 +24,9 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   val time_interval = 0.00001
   val digital_clock_F = 20 * MHz
 
-  def butterLowpass(order: Int, sampleFrequency: Double, cutoffFrequency: Double): List[Double] => Seq[Double] = {
 
-    val (b, a) = new TransferFunctionBuilder()
-      .butterworthApproximation(order)  // The order of Butterworth filter
-      .digitalize(sampleFrequency)  // digital filter with sampling rate at 30 Hz
-      .transformToLowPass(cutoffFrequency) // Low-pass filter with cutoff frequency 3.5Hz
-      .coefficients
-    return (x: List[Double]) => {filterForward(b, a, x)}
+  def lowpass(order: Int, sampleFrequency: Double, cutoffFrequency: Double): DenseVector[Double] => DenseVector[Double] = {
+    return (x: DenseVector[Double]) => {filterLP(data = x, omega = cutoffFrequency, sampleRate = sampleFrequency )(CanFilterLPHP.dvDouble1DFilterLPHP)}
   }
 
   def timeSequence(duration: Double, frequency: Double): Seq[Double] = {
@@ -52,15 +49,16 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   val t = timeSequence(time_interval, analog_F_sample)
   val RF = cosSignal(F_RF)
   val IM = cosSignal(F_IM)
-  var I = butterLowpass(5, analog_F_sample, 3.5 * MHz)(t.map(t => RF(t) * cosSignal(F_LO)(t)).toList)
-  var Q = butterLowpass(5, analog_F_sample, 3.5 * MHz)(t.map(t => RF(t) * cosSignal(F_LO)(t)).toList)
-  I = I.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
-  Q = Q.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
+  var I = lowpass(5, analog_F_sample, 3.5 * MHz)( DenseVector(t.map(t => RF(t) * cosSignal(F_LO)(t)).toArray))
+  var Q = lowpass(5, analog_F_sample, 3.5 * MHz)( DenseVector(t.map(t => RF(t) * cosSignal(F_LO)(t)).toArray))
+  var sampled_I = I.toArray.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
+  var sampled_Q = Q.toArray.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
 
 
   it should "Fuzz Delay Chain" in {
     test(new HilbertFilter()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.clock.step(10)
+      print(sampled_I)
+      print(sampled_Q)
     }
   }
 }
