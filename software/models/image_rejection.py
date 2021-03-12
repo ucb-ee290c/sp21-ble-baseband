@@ -109,21 +109,23 @@ def hilbert_transform(Q):
     return result
 
 t = np.linspace(0, t_interval, num = int(analog_F_sample *t_interval))
-I, Q = mix(lambda t: RF(t))
+I, Q = mix(lambda t: RF(t) + IM(t))
 I, Q = I(t), Q(t)
 I, Q = analog_lowpass(I, Q)
 result = ADC_sampling(I, MHz(20), analog_F_sample)
 print(result[1])
 t = result[0]
+print("i = ", result[1])
 I = [s - 15 for s in result[1]]
 result = ADC_sampling(Q, MHz(20), analog_F_sample)
+print("q = ", result[1])
 Q = [s - 15 for s in result[1]]
 I = [FixedPoint(s, True, 6, 0) for s in I]
 Q = [FixedPoint(s, True, 6, 0) for s in Q]
 
 ht = hilbert_transform(Q)
-plt.plot(t, ht)
-plt.plot(t, Q)
+#plt.plot(t, ht)
+#plt.plot(t, Q)
 plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
 #print([I[t] - ht[t] for t in range(len(t))])
 #plt.plot(t, I)
