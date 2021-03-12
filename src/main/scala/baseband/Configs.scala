@@ -24,8 +24,8 @@ trait CanHavePeripheryBLEBasebandModem { this: BaseSubsystem =>
   }
 }
 
-class WithBLEBasebandModem extends Config((site, here, up) => {
-  case BLEBasebandModemKey => Some(BLEBasebandModemParams())
+class WithBLEBasebandModem(params: BLEBasebandModemParams = BLEBasebandModemParams()) extends Config((site, here, up) => {
+  case BLEBasebandModemKey => Some(params)
 })
 
 /* Note: The following are commented out as they rely on importing chipyard, which no
@@ -33,8 +33,8 @@ class WithBLEBasebandModem extends Config((site, here, up) => {
          files in: <chipyard root>/generators/chipyard/src/main/scala/<file>
 
          To use, you should then add the following to your config:
-           new baseband.WithBLEBasebandModem ++
-           new chipyard.iobinders.WithBLEBasebandModemPunchthrough ++
+           new baseband.WithBLEBasebandModem() ++
+           new chipyard.iobinders.WithBLEBasebandModemPunchthrough() ++
            new chipyard.harness.WithBLEBasebandModemTiedOff ++
 
          Finally add the following to DigitalTop.scala:
@@ -42,10 +42,12 @@ class WithBLEBasebandModem extends Config((site, here, up) => {
 */
 
 /* Place this in IOBinders.scala for use
-class WithBLEBasebandModemPunchthrough extends OverrideIOBinder({
+import baseband.{CanHavePeripheryBLEBasebandModem, BLEBasebandModemAnalogIO, BLEBasebandModemParams}
+
+class WithBLEBasebandModemPunchthrough(params: BLEBasebandModemParams = BLEBasebandModemParams()) extends OverrideIOBinder({
   (system: CanHavePeripheryBLEBasebandModem) => {
     val ports: Seq[BLEBasebandModemAnalogIO] = system.baseband.map({ a =>
-      val analog = IO(new BLEBasebandModemAnalogIO).suggestName("baseband")
+      val analog = IO(new BLEBasebandModemAnalogIO(params)).suggestName("baseband")
       analog <> a
       analog
     }).toSeq
@@ -55,12 +57,15 @@ class WithBLEBasebandModemPunchthrough extends OverrideIOBinder({
 */
 
 /* Note: Place this in HarnessBinders.scala for use
+import baseband.{CanHavePeripheryBLEBasebandModem, BLEBasebandModemAnalogIO}
+
 class WithBLEBasebandModemTiedOff extends OverrideHarnessBinder({
   (system: CanHavePeripheryBLEBasebandModem, th: HasHarnessSignalReferences, ports: Seq[BLEBasebandModemAnalogIO]) => {
     ports.map { p => {
-      p.modemClock := th.harnessClock
-      p.data.rx.i := 0.U
-      p.data.rx.q := 0.U
+      p.data.rx.i.data := 0.U
+      p.data.rx.i.valid := false.B
+      p.data.rx.q.data := 0.U
+      p.data.rx.q.valid := false.B
       p.data.tx.pllReady := true.B
     }}
   }

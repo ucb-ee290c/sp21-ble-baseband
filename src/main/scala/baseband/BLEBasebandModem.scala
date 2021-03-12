@@ -217,7 +217,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
       RegField(4, q_filter_r7)),
     0x31 -> Seq(
       RegField(4, q_filter_r8),
-      RegField(4, q_filter_r9)),
+      RegField(4, q_filter_r9))
   )
 }
 

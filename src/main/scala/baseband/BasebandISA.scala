@@ -29,7 +29,7 @@ object BasebandISA {
    */
   val SEND_CMD = 1.U
 
-  /* Send command:
+  /* Receive command:
       Place the device into receive mode. If a message is picked up, it will be stored starting at
       the specified storage address.
       [ Data = X | secondaryInst = X | primaryInst = 2 ]

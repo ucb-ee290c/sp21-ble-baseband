@@ -31,7 +31,7 @@ class DisassemblerControlIO extends Bundle {
   val out = Output(new PDAControlOutputBundle)
 }
 
-class BasebandControlIO(addrBits: Int) extends Bundle {
+class BasebandControlIO(val addrBits: Int) extends Bundle {
   val assembler = new AssemblerControlIO
   val disassembler = new DisassemblerControlIO
   val baseAddr = Flipped(Valid(UInt(addrBits.W)))

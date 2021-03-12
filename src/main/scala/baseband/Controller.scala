@@ -3,31 +3,204 @@ package baseband
 import chisel3._
 import chisel3.experimental.BundleLiterals.AddBundleLiteralConstructor
 import chisel3.util._
-import chisel3.experimental._
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp, LazyModuleImpLike}
-import freechips.rocketchip.tile.{HasCoreParameters, RoCCCommand, XLen}
 
 import ee290cdma._
 import modem._
 
-class TXChainController(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
-  val io = IO(new Bundle {
-    val assemblerControl = Flipped(new AssemblerControlIO)
-    val constants = Input(new BasebandConstants)
-  })
-
-  val s_idle :: s_waiting :: Nil = Enum(3)
-  val state = RegInit(s_idle)
+class TXChainControllerCommand(val addrBits: Int, val maxReadSize: Int) extends Bundle {
+  val addr = UInt(addrBits.W)
+  val totalBytes = UInt(maxReadSize.W)
 }
 
-class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
+class TXChainControllerControlIO(addrBits: Int, maxReadSize: Int) extends Bundle {
+  val cmd = Flipped(Decoupled(new TXChainControllerCommand(addrBits, maxReadSize)))
+  val done = Output(Bool())
+}
+
+class TXChainController(params: BLEBasebandModemParams) extends Module {
+  val io = IO(new Bundle {
+    val assemblerControl = Flipped(new AssemblerControlIO)
+    val  dma = new Bundle {
+      val readReq = Decoupled(new EE290CDMAReaderReq(params.paddrBits, params.maxReadSize))
+      val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
+    }
+    val constants = Input(new BasebandConstants)
+    val control = new TXChainControllerControlIO(params.paddrBits, params.maxReadSize)
+  })
+
+  val s_idle :: s_working :: Nil = Enum(2)
+  val state = RegInit(s_idle)
+
+  val done = RegInit(false.B)
+  val cmd = Reg(new TXChainControllerCommand(params.paddrBits, params.maxReadSize))
+
+  val assemblerReqValid = RegInit(false.B)
+  val assemblerDone = RegInit(false.B)
+
+  val dmaReqValid = RegInit(false.B)
+  val dmaRespReady = RegInit(false.B)
+  val dmaReadResp = Reg(new EE290CDMAReaderResp(params.maxReadSize))
+
+  // Control IO
+  io.control.cmd.ready := io.assemblerControl.in.ready & io.dma.readReq.ready & state === s_idle
+  io.control.done := done
+
+  // Assembler IO
+  io.assemblerControl.in.valid := assemblerReqValid
+  io.assemblerControl.in.bits.pduLength := cmd.totalBytes - 2.U
+  io.assemblerControl.in.bits.aa := io.constants.accessAddress
+
+  // DMA IO
+  io.dma.readReq.valid := dmaReqValid
+  io.dma.readReq.bits.addr := cmd.addr
+  io.dma.readReq.bits.totalBytes := cmd.totalBytes
+
+  io.dma.readResp.ready := dmaRespReady
+
+  switch(state) {
+    is(s_idle) {
+      done := false.B
+
+      when(io.control.cmd.fire()) {
+        when(io.control.cmd.bits.totalBytes > 1.U & io.control.cmd.bits.totalBytes < 258.U) {
+          cmd := io.control.cmd.bits
+
+          dmaReqValid := true.B
+          assemblerReqValid := true.B
+
+          state := s_working
+        }.otherwise {
+          // TODO: Invalid PDU width exception
+        }
+      }
+    }
+    is(s_working) {
+      when(io.dma.readReq.fire()) {
+        dmaReqValid := false.B
+        dmaRespReady := true.B
+      }
+
+      when(io.assemblerControl.in.fire()) {
+        assemblerReqValid := false.B
+      }
+
+      when(io.dma.readResp.fire()) {
+        dmaReadResp := io.dma.readResp.bits
+        dmaRespReady := false.B
+      }
+
+      when(io.assemblerControl.out.done) {
+        assemblerDone := true.B
+      }
+
+      when(assemblerDone) { // TODO: When modem exists, this should be assemblerDone & modemDone
+        when(dmaReadResp.bytesRead === cmd.totalBytes) { // DMA should complete before our packet is done sending, so the resp should match our cmd
+          // Fire done
+          done := true.B
+
+          // Confirm that all regs get reset to false
+          assemblerReqValid := false.B
+          assemblerDone := false.B
+          dmaReqValid := false.B
+          dmaRespReady := false.B
+
+          state := s_idle
+        }.otherwise {
+          // TODO: Exception, didn't fetch enough DMA data
+        }
+      }
+    }
+  }
+}
+
+class RXChainControllerCommand(val addrBits: Int) extends Bundle {
+  val addr = UInt(addrBits.W)
+}
+
+class RXChainControllerControlIO(addrBits: Int) extends Bundle {
+  val cmd = Flipped(Decoupled(new RXChainControllerCommand(addrBits)))
+  val baseAddr = Valid(UInt(addrBits.W))
+  val done = Output(Bool())
+}
+
+class RXChainController(params: BLEBasebandModemParams) extends Module {
+  val io = IO(new Bundle {
+    val disassemblerControl = Flipped(new DisassemblerControlIO)
+    val constants = Input(new BasebandConstants)
+    val control = new RXChainControllerControlIO(params.paddrBits)
+  })
+
+  val s_idle :: s_working :: Nil = Enum(2)
+  val state = RegInit(s_idle)
+
+  val done = RegInit(false.B)
+  val cmd = Reg(new RXChainControllerCommand(params.paddrBits))
+
+  val baseAddrValid = RegInit(false.B)
+
+  val disassemblerReqValid = RegInit(false.B)
+  val disassemblerDone = RegInit(false.B)
+
+  // Control IO
+  io.control.cmd.ready := io.disassemblerControl.in.ready & state === s_idle
+  io.control.done := done
+  io.control.baseAddr.valid := baseAddrValid
+  io.control.baseAddr.bits := cmd.addr
+
+  // Disassembler IO
+  io.disassemblerControl.in.valid := disassemblerReqValid
+  io.disassemblerControl.in.bits.aa := io.constants.accessAddress
+
+  switch(state) {
+    is(s_idle) {
+      done := false.B
+
+      when(io.control.cmd.fire()) {
+        when(io.control.cmd.bits.addr(1,0) === 0.U) {
+          cmd := io.control.cmd.bits
+          baseAddrValid := true.B
+
+          state := s_working
+        }.otherwise {
+          // TODO: Invalid PDU width exception
+        }
+      }
+    }
+    is(s_working) {
+      when(io.control.baseAddr.fire()) {
+        disassemblerReqValid := true.B
+      }
+
+      when(io.disassemblerControl.in.fire()) {
+        disassemblerReqValid := false.B
+      }
+
+      when(io.disassemblerControl.out.done) {
+        disassemblerDone := true.B
+      }
+
+      when(disassemblerDone) { // TODO: When modem exists, this should be assemblerDone & modemDone
+        // Fire done
+        done := true.B
+
+        // Confirm that all regs get reset to false
+        disassemblerReqValid := false.B
+        disassemblerDone := false.B
+
+        state := s_idle
+      }
+    }
+  }
+}
+
+class Controller(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
     val basebandControl = Flipped(new BasebandControlIO(params.paddrBits))
     val cmd = Flipped(Decoupled(new BLEBasebandModemCommand))
-    val constants = Output(new BasebandConstants) // TODO: Rename? Includes constants that will be used by modem too
-    val dma = new Bundle {
-      val read = Decoupled(new EE290CDMAReaderReq(params.paddrBits, params.maxReadSize)) // Controller only issues read requests, the baseband issues write requests
+    val constants = Output(new BasebandConstants)
+    val  dma = new Bundle {
+      val readReq = Decoupled(new EE290CDMAReaderReq(params.paddrBits, params.maxReadSize))
+      val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
     }
   })
 
@@ -39,17 +212,33 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
 
   io.constants := constants
 
-  val s_idle :: s_tx :: s_rx :: s_debug:: s_interrupt :: Nil = Enum(5)
+  val s_idle :: s_tx :: s_rx :: s_debug :: s_interrupt :: Nil = Enum(5)
 
   val state = RegInit(s_idle)
 
-  val cmd = Reg(new BLEBasebandModemCommand)
+  // TX Controller
+  val txController = Module(new TXChainController(params))
+  io.basebandControl.assembler <> txController.io.assemblerControl
+  io.dma <> txController.io.dma
 
-  // Baseband control wires
-  io.basebandControl.assembler.in.bits.aa := constants.accessAddress
-  io.basebandControl.assembler.in.bits.pduLength := cmd.inst.data - 2.U // TODO: Change this to be a reference to reg command
+  txController.io.constants := constants
 
-  // TODO: Registers for ready and valids
+  val txControllerCmdValid = RegInit(false.B)
+  val txControllerCmd = Reg(new TXChainControllerCommand(params.paddrBits, params.maxReadSize))
+  txController.io.control.cmd.valid := txControllerCmdValid
+  txController.io.control.cmd.bits := txControllerCmd
+
+  // RX Controller
+  val rxController = Module(new RXChainController(params))
+  io.basebandControl.disassembler <> rxController.io.disassemblerControl
+  io.basebandControl.baseAddr <> rxController.io.control.baseAddr
+
+  rxController.io.constants := constants
+
+  val rxControllerCmdValid = RegInit(false.B)
+  val rxControllerCmd = Reg(new RXChainControllerCommand(params.paddrBits))
+  rxController.io.control.cmd.valid := rxControllerCmdValid
+  rxController.io.control.cmd.bits := rxControllerCmd
 
   // Command wires
   io.cmd.ready := state === s_idle
@@ -78,31 +267,34 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
             }
           }
           is (BasebandISA.SEND_CMD) {
-            cmd := io.cmd.bits
-            when (io.cmd.bits.inst.data > 1.U & io.cmd.bits.inst.data < 258.U) {
-              // TODO: Switch off chip mode
-              state := s_rx
-            }.otherwise {
-              // TODO: Send interrupt for illegal PDU width
-            }
+            txControllerCmdValid := true.B
+            txControllerCmd.totalBytes := io.cmd.bits.inst.data
+            txControllerCmd.addr := io.cmd.bits.additionalData
+            state := s_tx
           }
           is (BasebandISA.RECEIVE_CMD) {
-            cmd := io.cmd.bits
-            when(io.cmd.bits.additionalData(1,0) === 0.U) { // Check address is byte aligned
-              // TODO: Switch off chip mode
-              state := s_rx
-            }.otherwise {
-              // TODO: Send misaligned address instruction
-            }
+            rxControllerCmdValid := true.B
+            rxControllerCmd.addr := io.cmd.bits.additionalData
+            state := s_rx
           }
         }
       }
     }
     is (s_tx) {
+      when (txController.io.control.cmd.fire()) {
+        txControllerCmdValid := false.B
+      }
 
+      when (txController.io.control.done) {
+        state := s_idle
+      }
     }
-    is (s_rx) {
-      when (io.basebandControl.disassembler.out.done) {
+    is (s_rx) { // TODO: Need to peek into valid commands and if they are RX, or exit allow for return to idle when not busy
+      when (rxController.io.control.cmd.fire()) {
+        rxControllerCmdValid := false.B
+      }
+
+      when (rxController.io.control.done) {
         state := s_idle
       }
     }
