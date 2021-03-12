@@ -23,6 +23,7 @@ class DelayChainTest extends AnyFlatSpec with ChiselScalatestTester {
             c.clock.step()
           }
           assert(c.io.out.valid.peek().litToBoolean)
+          print(c.io.out.bits.peek().litValue())
           assert(c.io.out.bits.peek().litValue() == in)
         }
       }

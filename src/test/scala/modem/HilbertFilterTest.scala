@@ -63,10 +63,10 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Do something" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.in.i.valid.poke(true.B)
+      c.io.out.data.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
-      while (i < mock_input_I.length || c.io.out.data.valid.peek().litToBoolean) {
+      while (i < mock_input_I.length) {
         c.io.in.i.data.poke(mock_input_I(i).asUInt())
         c.io.in.q.data.poke(mock_input_Q(i).asUInt())
         c.io.in.q.valid.poke((i < mock_input_I.length).asBool())
