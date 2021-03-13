@@ -9,7 +9,7 @@ import modem._
 
 class TXChainControllerCommand(val addrBits: Int, val maxReadSize: Int) extends Bundle {
   val addr = UInt(addrBits.W)
-  val totalBytes = UInt(maxReadSize.W)
+  val totalBytes = UInt(log2Ceil(maxReadSize).W)
 }
 
 class TXChainControllerControlIO(addrBits: Int, maxReadSize: Int) extends Bundle {

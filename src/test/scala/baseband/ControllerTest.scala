@@ -38,7 +38,7 @@ class ControllerAndBasebandTester(params: BLEBasebandModemParams =  BLEBasebandM
 }
 
 class ControllerTest extends AnyFlatSpec with ChiselScalatestTester {
-  val tests = 40
+  val tests = 50
 
   def seqToBinary(in: Seq[Int]): Seq[Int] = {
     in.map(x => String.format("%8s", x.toBinaryString).replaceAll(" ", "0").reverse).mkString("").map(c => c.toString.toInt)
@@ -136,75 +136,96 @@ class ControllerTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new ControllerAndBasebandTester(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val dmaReadReqDriver = new DecoupledDriverSlave(c.clock, c.io.controllerDMA.readReq, 0)
       val dmaReadReqMonitor = new DecoupledMonitor(c.clock, c.io.controllerDMA.readReq)
+      val dmaReadRespDriver= new DecoupledDriverMaster(c.clock, c.io.controllerDMA.readResp)
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
       val dmaDataDriver = new DecoupledDriverMaster(c.clock, c.io.basebandDMA.readData)
+      val dmaDataMonitor = new DecoupledMonitor(c.clock, c.io.basebandDMA.readData)
       val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.basebandDMA.writeReq, 0)
       val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.basebandDMA.writeReq)
 
-      val pduLengthIn = 18
-      val addrInString = s"x${4000}"
+      for (i <- 0 until tests) {
+        val pduLengthIn = scala.util.Random.nextInt(256) + 2
+        val addrInString = s"x${scala.util.Random.nextInt(1600)}0"
 
-      // Disable whitening
-      cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-        new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
-          _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX, _.additionalData -> 0.U)
-      ))
+        println(s"Test ${i}:\t pduLength ${pduLengthIn},\t addr 0${addrInString}")
 
-      // Push a debug command with post assembler loopback
-      cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-        new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.DEBUG_CMD,
-          _.inst.secondaryInst -> 2.U, _.inst.data -> pduLengthIn.U, _.additionalData -> addrInString.U)
-      ))
+        // Random whitening
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX,
+            _.additionalData -> (scala.util.Random.nextInt(62) + 1).U)
+        ))
 
-      while (dmaReadReqMonitor.monitoredTransactions.isEmpty) {
-        c.clock.step()
-      }
+        // Push a debug command with post assembler loopback
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.DEBUG_CMD,
+            _.inst.secondaryInst -> 2.U, _.inst.data -> pduLengthIn.U, _.additionalData -> addrInString.U)
+        ))
 
-      val pduLength = dmaReadReqMonitor.monitoredTransactions.head.data.totalBytes.litValue.intValue
-      val addr = dmaReadReqMonitor.monitoredTransactions.head.data.addr.litValue.intValue
-
-
-      assert(pduLength == pduLengthIn)
-
-      dmaReadReqMonitor.monitoredTransactions.clear
-
-      val inBytes = Seq(scala.util.Random.nextInt(255), pduLength - 2) ++ Seq.tabulate(pduLength - 2)(_ => scala.util.Random.nextInt(255))
-
-      val (inData, inSize) = seqToWidePackets(beatBytes, inBytes)
-
-      dmaDataDriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
-
-      val expectedBaseAddr = (addrInString.U.litValue + pduLength + beatBytes) & ~(beatBytes-1)
-
-      val expectedOut = inData
-        .map(d => d.U)
-        .zip(inSize
-          .map(s => s.U))
-        .zip(inSize
-          .scanLeft(0)(_ + _)
-          .map(o => (o + expectedBaseAddr).U))
-        .map {
-          case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
-            .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
+        while (dmaReadReqMonitor.monitoredTransactions.isEmpty) {
+          c.clock.step()
         }
 
-      while (dmaWriteReqMonitor.monitoredTransactions.length != expectedOut.length) {
-        c.clock.step()
-      }
+        val pduLength = dmaReadReqMonitor.monitoredTransactions.head.data.totalBytes.litValue.intValue
+        val addr = dmaReadReqMonitor.monitoredTransactions.head.data.addr.litValue.intValue
 
-      c.clock.step(100)
 
-      assert(dmaWriteReqMonitor.monitoredTransactions.map(tx => tx.data.litValue()).length == expectedOut.length)
+        assert(pduLength == pduLengthIn)
+        assert(addr == addrInString.U.litValue.intValue)
 
-      dmaWriteReqMonitor.monitoredTransactions
-        .map(t => t.data)
-        .zip(expectedOut)
-        .foreach {
-          case (o, e) =>
-            assert(o.data.litValue == e.data.litValue)
-            assert(o.totalBytes.litValue == e.totalBytes.litValue)
-            assert(o.addr.litValue == e.addr.litValue)
+        dmaReadReqMonitor.monitoredTransactions.clear
+
+        val inBytes = Seq(scala.util.Random.nextInt(255), pduLength - 2) ++
+          Seq.tabulate(pduLength - 2)(_ => scala.util.Random.nextInt(255))
+
+        val (inData, inSize) = seqToWidePackets(beatBytes, inBytes)
+
+        dmaDataDriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
+
+        val expectedBaseAddr = (addrInString.U.litValue + pduLength + beatBytes) & ~(beatBytes - 1)
+
+        val expectedOut = inData
+          .map(d => d.U)
+          .zip(inSize
+            .map(s => s.U))
+          .zip(inSize
+            .scanLeft(0)(_ + _)
+            .map(o => (o + expectedBaseAddr).U))
+          .map {
+            case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
+              .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
+          }
+
+        while(dmaDataMonitor.monitoredTransactions.length != inData.length) {
+          c.clock.step()
         }
+
+        dmaDataMonitor.monitoredTransactions.clear
+
+        dmaReadRespDriver.push(new DecoupledTX(new EE290CDMAReaderResp(params.maxReadSize))
+          .tx((new EE290CDMAReaderResp(params.maxReadSize))
+            .Lit(_.bytesRead -> pduLengthIn.U)))
+
+        while (dmaWriteReqMonitor.monitoredTransactions.length != expectedOut.length) {
+          c.clock.step()
+        }
+
+        c.clock.step(100)
+
+        assert(dmaWriteReqMonitor.monitoredTransactions.map(tx => tx.data.litValue()).length == expectedOut.length)
+
+        dmaWriteReqMonitor.monitoredTransactions
+          .map(t => t.data)
+          .zip(expectedOut)
+          .foreach {
+            case (o, e) =>
+              assert(o.data.litValue == e.data.litValue)
+              assert(o.totalBytes.litValue == e.totalBytes.litValue)
+              assert(o.addr.litValue == e.addr.litValue)
+          }
+
+        dmaWriteReqMonitor.monitoredTransactions.clear
+      }
     }
   }
 }
