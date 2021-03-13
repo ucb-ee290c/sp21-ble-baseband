@@ -10,6 +10,32 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 import verif._
 import  ee290cdma._
+import modem._
+
+class ControllerAndBasebandTester(params: BLEBasebandModemParams =  BLEBasebandModemParams(), beatBytes: Int) extends Module {
+  val io = IO(new Bundle {
+    val cmd = Flipped(Decoupled(new BLEBasebandModemCommand))
+    val constants = Output(new BasebandConstants)
+    val  controllerDMA = new Bundle {
+      val readReq = Decoupled(new EE290CDMAReaderReq(params.paddrBits, params.maxReadSize))
+      val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
+    }
+    val basebandDMA = new BasebandDMAIO(params.paddrBits, beatBytes)
+    val modem = Flipped(new GFSKModemDigitalIO)
+  })
+
+  val controller = Module(new Controller(params, beatBytes))
+  io.cmd <> controller.io.cmd
+  io.controllerDMA <> controller.io.dma
+
+  io.constants := controller.io.constants
+
+  val baseband = Module(new Baseband(params, beatBytes))
+  baseband.io.control <> controller.io.basebandControl
+  baseband.io.constants := controller.io.constants
+  io.basebandDMA <> baseband.io.dma
+  io.modem <> baseband.io.modem
+}
 
 class ControllerTest extends AnyFlatSpec with ChiselScalatestTester {
   val tests = 40
@@ -38,30 +64,147 @@ class ControllerTest extends AnyFlatSpec with ChiselScalatestTester {
     (out, lengths)
   }
 
-  it should "Send correct signals" in {
+  it should "Execute a TX command" in {
     val beatBytes = 4
     val params = BLEBasebandModemParams()
-    test(new TXChainController(params)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val dmaReadReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.readReq, 0)
-      val dmaReadReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.readReq)
-      val assemblerInControlDriver = new DecoupledDriverSlave(c.clock, c.io.assemblerControl.in, 0)
-      val assemblerInControlMonitor = new DecoupledMonitor(c.clock, c.io.assemblerControl.in)
-      val controllerCmdInDriver = new DecoupledDriverMaster(c.clock, c.io.control.cmd)
+    test(new ControllerAndBasebandTester(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      val dmaReadReqDriver = new DecoupledDriverSlave(c.clock, c.io.controllerDMA.readReq, 0)
+      val dmaReadReqMonitor = new DecoupledMonitor(c.clock, c.io.controllerDMA.readReq)
+      val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
+      val dmaDataDriver = new DecoupledDriverMaster(c.clock, c.io.basebandDMA.readData)
+      val basebandTXDriver = new DecoupledDriverSlave(c.clock, c.io.modem.tx, 0)
+      val basebandTXMonitor = new DecoupledMonitor(c.clock, c.io.modem.tx)
 
-      controllerCmdInDriver.push(new DecoupledTX(new TXChainControllerCommand(params.paddrBits, params.maxReadSize)).tx(
-        new TXChainControllerCommand(params.paddrBits, params.maxReadSize).Lit(_.totalBytes -> 4.U, _.addr -> "x4000".U)
+      val pduLengthIn = 18
+      val addrIn = 4000 * 4
+      val aa = BigInt("8E89BED6", 16)
+
+      val preambleExpected = "01010101".map(c => c.toString.toInt)
+      val aaExpected = aa.toInt.toBinaryString.reverse.map(c => c.toString.toInt)
+
+      // Disable whitening
+      cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+        new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+          _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX, _.additionalData -> 0.U)
       ))
 
-      c.clock.step(10)
-      println(assemblerInControlMonitor.monitoredTransactions.map(tx => tx.data))
-      println(dmaReadReqMonitor.monitoredTransactions.map(tx => tx.data))
+      // Push a send command
+      cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+        new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.SEND_CMD,
+          _.inst.data -> pduLengthIn.U, _.additionalData -> addrIn.U)
+      ))
+
+      while (dmaReadReqMonitor.monitoredTransactions.isEmpty) {
+        c.clock.step()
+      }
+
+      val pduLength = dmaReadReqMonitor.monitoredTransactions.head.data.totalBytes.litValue.intValue
+      val addr = dmaReadReqMonitor.monitoredTransactions.head.data.addr.litValue.intValue
+
+
+      assert(pduLength == pduLengthIn)
+      assert(addr == addrIn)
+
+      dmaReadReqMonitor.monitoredTransactions.clear
+
+      val inBytes = Seq(scala.util.Random.nextInt(255), pduLength) ++ Seq.tabulate(pduLength - 2)(_ => scala.util.Random.nextInt(255))
+
+      val (inData, inSize) = seqToWidePackets(beatBytes, inBytes)
+
+      dmaDataDriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
+
+      val expectedOut = preambleExpected ++ aaExpected ++ seqToBinary(inBytes)
+
+      while (basebandTXMonitor.monitoredTransactions.length != expectedOut.length) {
+        c.clock.step()
+      }
+
+      c.clock.step(100)
+
+      assert(basebandTXMonitor.monitoredTransactions.map(tx => tx.data.litValue()).length == (expectedOut.length + 24)) // Add 24 bit CRC
+
+      basebandTXMonitor.monitoredTransactions
+        .map(tx => tx.data.litValue())
+        .zip(expectedOut)
+        .foreach { case (o, e) => assert(o == e) }
     }
   }
 
-  it should "elaborate Controller" in {
+  it should "Execute a debug command" in {
+    val beatBytes = 4
     val params = BLEBasebandModemParams()
-    test(new Controller(params)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.clock.step(10)
+    test(new ControllerAndBasebandTester(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      val dmaReadReqDriver = new DecoupledDriverSlave(c.clock, c.io.controllerDMA.readReq, 0)
+      val dmaReadReqMonitor = new DecoupledMonitor(c.clock, c.io.controllerDMA.readReq)
+      val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
+      val dmaDataDriver = new DecoupledDriverMaster(c.clock, c.io.basebandDMA.readData)
+      val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.basebandDMA.writeReq, 0)
+      val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.basebandDMA.writeReq)
+
+      val pduLengthIn = 18
+      val addrInString = s"x${4000}"
+
+      // Disable whitening
+      cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+        new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+          _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX, _.additionalData -> 0.U)
+      ))
+
+      // Push a debug command with post assembler loopback
+      cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+        new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.DEBUG_CMD,
+          _.inst.secondaryInst -> 2.U, _.inst.data -> pduLengthIn.U, _.additionalData -> addrInString.U)
+      ))
+
+      while (dmaReadReqMonitor.monitoredTransactions.isEmpty) {
+        c.clock.step()
+      }
+
+      val pduLength = dmaReadReqMonitor.monitoredTransactions.head.data.totalBytes.litValue.intValue
+      val addr = dmaReadReqMonitor.monitoredTransactions.head.data.addr.litValue.intValue
+
+
+      assert(pduLength == pduLengthIn)
+
+      dmaReadReqMonitor.monitoredTransactions.clear
+
+      val inBytes = Seq(scala.util.Random.nextInt(255), pduLength - 2) ++ Seq.tabulate(pduLength - 2)(_ => scala.util.Random.nextInt(255))
+
+      val (inData, inSize) = seqToWidePackets(beatBytes, inBytes)
+
+      dmaDataDriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
+
+      val expectedBaseAddr = (addrInString.U.litValue + pduLength + beatBytes) & ~(beatBytes-1)
+
+      val expectedOut = inData
+        .map(d => d.U)
+        .zip(inSize
+          .map(s => s.U))
+        .zip(inSize
+          .scanLeft(0)(_ + _)
+          .map(o => (o + expectedBaseAddr).U))
+        .map {
+          case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
+            .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
+        }
+
+      while (dmaWriteReqMonitor.monitoredTransactions.length != expectedOut.length) {
+        c.clock.step()
+      }
+
+      c.clock.step(100)
+
+      assert(dmaWriteReqMonitor.monitoredTransactions.map(tx => tx.data.litValue()).length == expectedOut.length)
+
+      dmaWriteReqMonitor.monitoredTransactions
+        .map(t => t.data)
+        .zip(expectedOut)
+        .foreach {
+          case (o, e) =>
+            assert(o.data.litValue == e.data.litValue)
+            assert(o.totalBytes.litValue == e.totalBytes.litValue)
+            assert(o.addr.litValue == e.addr.litValue)
+        }
     }
   }
 }

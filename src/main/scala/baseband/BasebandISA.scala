@@ -15,11 +15,9 @@ object BasebandISA {
 
   // secondaryInst values for CONFIG_CMD
   val CONFIG_CRC_SEED = 0.U
-  val CONFIG_WHITENING_SEED = 1.U
-  val CONFIG_ACCESS_ADDRESS = 2.U
-  val CONFIG_CHANNEL_INDEX = 3.U
-  val CONFIG_ADDITIONAL_FRAME_SPACE = 4.U
-  val CONFIG_LOOPBACK_SELECT = 5.U
+  val CONFIG_ACCESS_ADDRESS = 1.U
+  val CONFIG_CHANNEL_INDEX = 2.U
+  val CONFIG_ADDITIONAL_FRAME_SPACE = 3.U
 
   /* Send command:
       Transmit a specified number of PDU header and data bytes. Bytes are gathered by loading them from the
@@ -36,6 +34,13 @@ object BasebandISA {
       [ additionalData = <storage address> ]
  */
   val RECEIVE_CMD = 2.U
+
+  /* Receive exit command:
+      Exit the device from receive mode.
+      [ Data = X | secondaryInst = X | primaryInst = 3 ]
+      [ additionalData = X ]
+ */
+  val RECEIVE_EXIT_CMD = 3.U
 
   /* Debug command:
       Turns on both the RX and TX paths according to the loopback mask and passes the specified number of PDU

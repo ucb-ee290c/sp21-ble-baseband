@@ -114,6 +114,7 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 }
 
 class RXChainControllerCommand(val addrBits: Int) extends Bundle {
+  val command = UInt(1.W)
   val addr = UInt(addrBits.W)
 }
 
@@ -140,22 +141,27 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
   val disassemblerReqValid = RegInit(false.B)
   val disassemblerDone = RegInit(false.B)
+  val disassemblerLength = RegInit(0.U(8.W))
+  val disassemblerBusy = RegInit(false.B)
 
   // Control IO
-  io.control.cmd.ready := io.disassemblerControl.in.ready & state === s_idle
+  io.control.cmd.ready := io.disassemblerControl.in.ready & !disassemblerBusy
   io.control.done := done
   io.control.baseAddr.valid := baseAddrValid
   io.control.baseAddr.bits := cmd.addr
 
   // Disassembler IO
   io.disassemblerControl.in.valid := disassemblerReqValid
+  io.disassemblerControl.in.bits.command := cmd.command
   io.disassemblerControl.in.bits.aa := io.constants.accessAddress
 
   switch(state) {
     is(s_idle) {
       done := false.B
+      disassemblerLength := 0.U
+      disassemblerReqValid := false.B
 
-      when(io.control.cmd.fire()) {
+      when(io.control.cmd.fire() & io.control.cmd.bits.command === PDAControlInputCommands.START_CMD) {
         when(io.control.cmd.bits.addr(1,0) === 0.U) {
           cmd := io.control.cmd.bits
           baseAddrValid := true.B
@@ -168,6 +174,8 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
     }
     is(s_working) {
       when(io.control.baseAddr.fire()) {
+        baseAddrValid := false.B
+
         disassemblerReqValid := true.B
       }
 
@@ -175,8 +183,26 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
         disassemblerReqValid := false.B
       }
 
+      when(io.disassemblerControl.out.busy) { // Point of no return for this command
+        disassemblerBusy := true.B
+      }.elsewhen(io.control.cmd.fire() & io.control.cmd.bits.command === PDAControlInputCommands.EXIT_CMD) {
+        disassemblerReqValid := true.B
+        cmd := io.control.cmd.bits
+
+        // Confirm that all other regs get reset to false
+        disassemblerBusy := false.B
+        disassemblerDone := false.B
+
+        state := s_idle
+      }
+
       when(io.disassemblerControl.out.done) {
         disassemblerDone := true.B
+        disassemblerBusy := false.B
+        disassemblerLength := io.disassemblerControl.out.length
+        when (io.disassemblerControl.out.flag_aa | io.disassemblerControl.out.flag_crc) {
+          // TODO: Exception
+        }
       }
 
       when(disassemblerDone) { // TODO: When modem exists, this should be assemblerDone & modemDone
@@ -184,8 +210,11 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
         done := true.B
 
         // Confirm that all regs get reset to false
+        disassemblerBusy := false.B
         disassemblerReqValid := false.B
         disassemblerDone := false.B
+
+        // TODO: Send disassembler length in interrupt
 
         state := s_idle
       }
@@ -193,7 +222,7 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
   }
 }
 
-class Controller(params: BLEBasebandModemParams) extends Module {
+class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   val io = IO(new Bundle {
     val basebandControl = Flipped(new BasebandControlIO(params.paddrBits))
     val cmd = Flipped(Decoupled(new BLEBasebandModemCommand))
@@ -228,6 +257,8 @@ class Controller(params: BLEBasebandModemParams) extends Module {
   txController.io.control.cmd.valid := txControllerCmdValid
   txController.io.control.cmd.bits := txControllerCmd
 
+  val txControllerDone = RegInit(false.B)
+
   // RX Controller
   val rxController = Module(new RXChainController(params))
   io.basebandControl.disassembler <> rxController.io.disassemblerControl
@@ -239,6 +270,12 @@ class Controller(params: BLEBasebandModemParams) extends Module {
   val rxControllerCmd = Reg(new RXChainControllerCommand(params.paddrBits))
   rxController.io.control.cmd.valid := rxControllerCmdValid
   rxController.io.control.cmd.bits := rxControllerCmd
+
+  val rxControllerDone = RegInit(false.B)
+
+  // Loopback Mask
+  val loopbackMask = RegInit(0.U(4.W))
+  io.basebandControl.loopback := loopbackMask(1,0).asBools()
 
   // Command wires
   io.cmd.ready := state === s_idle
@@ -261,9 +298,6 @@ class Controller(params: BLEBasebandModemParams) extends Module {
               is (BasebandISA.CONFIG_ADDITIONAL_FRAME_SPACE) {
                 constants.additionalFrameSpace := io.cmd.bits.additionalData
               }
-              is (BasebandISA.CONFIG_LOOPBACK_SELECT) {
-                constants.loopbackSelect := io.cmd.bits.additionalData
-              }
             }
           }
           is (BasebandISA.SEND_CMD) {
@@ -274,8 +308,21 @@ class Controller(params: BLEBasebandModemParams) extends Module {
           }
           is (BasebandISA.RECEIVE_CMD) {
             rxControllerCmdValid := true.B
+            rxControllerCmd.command := PDAControlInputCommands.START_CMD
             rxControllerCmd.addr := io.cmd.bits.additionalData
             state := s_rx
+          }
+          is (BasebandISA.DEBUG_CMD) {
+            loopbackMask := io.cmd.bits.inst.secondaryInst
+
+            txControllerCmdValid := true.B
+            txControllerCmd.totalBytes := io.cmd.bits.inst.data
+            txControllerCmd.addr := io.cmd.bits.additionalData
+
+            rxControllerCmdValid := true.B
+            rxControllerCmd.command := PDAControlInputCommands.START_CMD
+            rxControllerCmd.addr := (io.cmd.bits.additionalData + io.cmd.bits.inst.data + beatBytes.U) & (~((beatBytes-1).U(params.paddrBits.W))).asUInt
+            state := s_debug
           }
         }
       }
@@ -299,14 +346,33 @@ class Controller(params: BLEBasebandModemParams) extends Module {
       }
     }
     is (s_debug) {
+      when (rxController.io.control.cmd.fire()) {
+        rxControllerCmdValid := false.B
+      }
 
+      when (txController.io.control.cmd.fire()) {
+        txControllerCmdValid := false.B
+      }
+
+      when (txController.io.control.done) {
+        txControllerDone := true.B
+      }
+
+      when (rxController.io.control.done) {
+        rxControllerDone := true.B
+      }
+
+      when (rxControllerDone & txControllerDone) {
+        loopbackMask := 0.U
+
+        txControllerDone := false.B
+        rxControllerDone := false.B
+
+        state := s_idle
+      }
     }
     is (s_interrupt) {
-      // TODO: When interrupt queue fires to let us take up our message, then we are good to go
-      // when (io.interrupt.queue.fire()) {
-      //   state := s_idle
-      //   io.interrupt.signal := true.B
-      // }
+      rxControllerCmd.command := PDAControlInputCommands.EXIT_CMD
     }
   }
 }

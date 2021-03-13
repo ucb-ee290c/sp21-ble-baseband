@@ -11,25 +11,24 @@ import org.scalatest.flatspec.AnyFlatSpec
 import verif._
 import  ee290cdma._
 
-class BasebandLoopback(addrBits: Int, beatBytes: Int) extends Module {
-  val io = IO(new BasebandIO(addrBits, beatBytes))
+class BasebandLoopback(params: BLEBasebandModemParams = BLEBasebandModemParams(), beatBytes: Int) extends Module {
+  val io = IO(new BasebandIO(params.paddrBits, beatBytes))
 
-  val baseband = Module(new Baseband(addrBits, beatBytes))
+  val baseband = Module(new Baseband(params, beatBytes))
 
   io.control <> baseband.io.control
   io.dma <> baseband.io.dma
 
   baseband.io.constants := io.constants
 
-  baseband.io.loopback := true.B
+  baseband.io.control.loopback := Seq(false.B, true.B)
 
   baseband.io.modem.rx <> DontCare
   baseband.io.modem.tx <> DontCare
 
   io.modem.rx <> DontCare
   io.modem.tx <> DontCare
-  io.loopback := DontCare
-
+  io.control.loopback := DontCare
 }
 
 class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
@@ -116,9 +115,9 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "Pass a full baseband loop without whitening" in {
-    val addrBits = 32
+    val params = BLEBasebandModemParams()
     val beatBytes = 4
-    test(new BasebandLoopback(addrBits, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new BasebandLoopback(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDMADriver = new DecoupledDriverMaster(c.clock, c.io.dma.readData)
       val paInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.assembler.in)
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
@@ -141,8 +140,10 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
 
         val (inData, inSize) = seqToWidePackets(beatBytes, Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255)))
 
-        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
-        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
+        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
+        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
         inDMADriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
 
         val expectedOut = inData
@@ -153,7 +154,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
             .scanLeft(0)(_ + _)
             .map(o => (o + BigInt(baseAddr, 16)).U))
           .map {
-            case ((d, s), a) => (new EE290CDMAWriterReq(addrBits, beatBytes))
+            case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
               .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
           }
 
@@ -181,9 +182,9 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "Pass a full baseband loop with whitening" in {
-    val addrBits = 32
+    val params = BLEBasebandModemParams()
     val beatBytes = 4
-    test(new BasebandLoopback(addrBits, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new BasebandLoopback(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDMADriver = new DecoupledDriverMaster(c.clock, c.io.dma.readData)
       val paInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.assembler.in)
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
@@ -207,8 +208,10 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
 
         val (inData, inSize) = seqToWidePackets(beatBytes, Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255)))
 
-        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
-        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
+        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
+        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
         inDMADriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
 
         val expectedOut = inData
@@ -219,7 +222,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
             .scanLeft(0)(_ + _)
             .map(o => (o + BigInt(baseAddr, 16)).U))
           .map {
-            case ((d, s), a) => (new EE290CDMAWriterReq(addrBits, beatBytes))
+            case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
               .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
           }
 
@@ -247,9 +250,9 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "Pass a short length PDU baseband loop without whitening" in {
-    val addrBits = 32
+    val params = BLEBasebandModemParams()
     val beatBytes = 4
-    test(new BasebandLoopback(addrBits, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new BasebandLoopback(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDMADriver = new DecoupledDriverMaster(c.clock, c.io.dma.readData)
       val paInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.assembler.in)
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
@@ -272,8 +275,10 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
 
         val (inData, inSize) = seqToWidePackets(beatBytes, Seq(0, pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255)))
 
-        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
-        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
+        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
+        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
         inDMADriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
 
         val expectedOut = inData
@@ -284,7 +289,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
             .scanLeft(0)(_ + _)
             .map(o => (o + BigInt(baseAddr, 16)).U))
           .map {
-            case ((d, s), a) => (new EE290CDMAWriterReq(addrBits, beatBytes))
+            case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
               .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
           }
 
@@ -312,9 +317,9 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "Pass a zero length PDU baseband loop without whitening" in {
-    val addrBits = 32
+    val params = BLEBasebandModemParams()
     val beatBytes = 4
-    test(new BasebandLoopback(addrBits, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new BasebandLoopback(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDMADriver = new DecoupledDriverMaster(c.clock, c.io.dma.readData)
       val paInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.assembler.in)
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
@@ -336,8 +341,10 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
 
         val (inData, inSize) = seqToWidePackets(beatBytes, Seq(scala.util.Random.nextInt(255), pduLength) ++ Seq.tabulate(pduLength)(_ => scala.util.Random.nextInt(255)))
 
-        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle).Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
-        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
+        paInControlDriver.push(new DecoupledTX(new PAControlInputBundle).tx((new PAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.pduLength -> pduLength.U)))
+        pdaInControlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+          .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
         inDMADriver.push(inData.map(d => new DecoupledTX(UInt((beatBytes * 8).W)).tx(d.U)))
 
 
@@ -349,7 +356,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
             .scanLeft(0)(_ + _)
             .map(o => (o + BigInt(baseAddr, 16)).U))
           .map {
-            case ((d, s), a) => (new EE290CDMAWriterReq(addrBits, beatBytes))
+            case ((d, s), a) => (new EE290CDMAWriterReq(params.paddrBits, beatBytes))
               .Lit(_.data -> d, _.totalBytes -> s, _.addr -> a)
           }
 

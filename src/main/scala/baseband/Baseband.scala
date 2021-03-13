@@ -13,7 +13,6 @@ class BasebandConstants extends Bundle {
   val crcSeed = UInt(24.W)
   val accessAddress = UInt(32.W)
   val additionalFrameSpace = UInt(32.W)
-  val loopbackSelect = UInt(32.W)
 }
 
 class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {
@@ -35,6 +34,7 @@ class BasebandControlIO(val addrBits: Int) extends Bundle {
   val assembler = new AssemblerControlIO
   val disassembler = new DisassemblerControlIO
   val baseAddr = Flipped(Valid(UInt(addrBits.W)))
+  val loopback = Input(Vec(2, Bool()))
 }
 
 class BasebandDMAAddresser(addrBits: Int, beatBytes: Int) extends Module {
@@ -82,11 +82,10 @@ class BasebandIO(val addrBits: Int, val beatBytes: Int) extends Bundle {
   val control = new BasebandControlIO(addrBits)
   val dma = new BasebandDMAIO(addrBits, beatBytes)
   val modem = Flipped(new GFSKModemDigitalIO)
-  val loopback = Input(Bool())
 }
 
-class Baseband(addrBits: Int, beatBytes: Int) extends Module {
-  val io = IO(new BasebandIO(addrBits, beatBytes))
+class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
+  val io = IO(new BasebandIO(params.paddrBits, beatBytes))
 
   val dmaPacketDisassembler = Module(new DMAPacketDisassembler(beatBytes))
   val assembler = Module(new PacketAssembler)
@@ -112,15 +111,15 @@ class Baseband(addrBits: Int, beatBytes: Int) extends Module {
   io.control.disassembler.out <> disassembler.io.out.control
 
 
-  val dmaAddresser = Module(new BasebandDMAAddresser(addrBits, beatBytes))
+  val dmaAddresser = Module(new BasebandDMAAddresser(params.paddrBits, beatBytes))
   dmaAddresser.io.in <> dmaPacketAssembler.io.dmaOut
   dmaAddresser.io.baseAddr <> io.control.baseAddr
   io.dma.writeReq <> dmaAddresser.io.out
 
-  val loopback = Module(new DecoupledLoopback(UInt(1.W)))
-  loopback.io.select := io.loopback
-  loopback.io.left.in <> assembler.io.out.data
-  io.modem.tx <> loopback.io.right.out
-  loopback.io.right.in <> io.modem.rx
-  disassembler.io.in.data <> loopback.io.left.out
+  val postAssemblerLoopback = Module(new DecoupledLoopback(UInt(1.W)))
+  postAssemblerLoopback.io.select := io.control.loopback(1)
+  postAssemblerLoopback.io.left.in <> assembler.io.out.data
+  io.modem.tx <> postAssemblerLoopback.io.right.out
+  postAssemblerLoopback.io.right.in <> io.modem.rx
+  disassembler.io.in.data <> postAssemblerLoopback.io.left.out
 }

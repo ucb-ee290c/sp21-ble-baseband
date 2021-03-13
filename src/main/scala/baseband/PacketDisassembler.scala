@@ -6,7 +6,12 @@ package baseband
 import chisel3._
 import chisel3.util._
 
+object PDAControlInputCommands {
+  val START_CMD = 0.U
+  val EXIT_CMD = 1.U
+}
 class PDAControlInputBundle extends Bundle {
+  val command = UInt(1.W)
   val aa = UInt(32.W)
 }
 
@@ -74,6 +79,7 @@ class PacketDisassembler extends Module {
   //packet status
   val length = RegInit(0.U(8.W))
   val done = RegInit(false.B)
+  val busy = RegInit(false.B)
   val flag_aa = RegInit(false.B)
   val flag_crc = RegInit(false.B)
 
@@ -85,6 +91,7 @@ class PacketDisassembler extends Module {
   //Handshake Parameters
   val out_valid = RegInit(false.B)
   val in_ready = RegInit(false.B)
+  val control_ready = RegInit(false.B)
 
   //data registers
   val data = RegInit(VecInit(Seq.fill(8)(false.B)))
@@ -101,7 +108,7 @@ class PacketDisassembler extends Module {
   val dewhite_data = Wire(UInt(1.W))
   val dewhite_valid = Wire(Bool())
   val dewhite_result = Wire(UInt(1.W))
-  val dewhite_seed = Cat(Reverse(io.constants.channelIndex),0.U(1.W))
+  val dewhite_seed = Cat(Reverse(io.constants.channelIndex), 0.U(1.W))
 
 
 
@@ -118,14 +125,15 @@ class PacketDisassembler extends Module {
   io.out.data.valid := out_valid
   io.in.data.ready := in_ready
 
-  io.in.control.ready := state === s_idle
-  io.out.control.busy := state =/= s_idle
+  io.in.control.ready := control_ready
+  io.out.control.busy := busy
 
   val out_fire = io.out.data.fire()
   val in_fire = io.in.data.fire()
 
 
   when (state === s_idle) {
+    control_ready := true.B
     in_ready := false.B
     out_valid := false.B
     data := 0.U(8.W).asBools()
@@ -135,7 +143,7 @@ class PacketDisassembler extends Module {
     flag_crc := false.B
     done := false.B
 
-    when (io.in.control.fire()) {//note: switch usage
+    when (io.in.control.fire() & io.in.control.bits.command === PDAControlInputCommands.START_CMD) {
       state := s_preamble
       aa := io.in.control.bits.aa
       counter := 0.U
@@ -154,10 +162,20 @@ class PacketDisassembler extends Module {
       // If we match on this cycle (pre-shift) the next bit will be AA but received in state preamble
       // This is why we try to match on a lookahead of the future data value
       when (Cat(io.in.data.bits, data.asUInt().apply(7,1)) === preamble) {
+        control_ready := false.B
+        busy := true.B
         state := s_aa
         counter := 0.U
         counter_byte := 0.U
         data := 0.U(8.W).asBools()
+      }.elsewhen(io.in.control.fire() & io.in.control.bits.command === PDAControlInputCommands.EXIT_CMD) { // Support pre-match exit
+        in_ready := false.B
+        out_valid := false.B
+        data := 0.U(8.W).asBools()
+
+        length := 0.U
+        flag_aa := false.B
+        flag_crc := false.B
       }
     }
   }.elsewhen (state === s_aa) {
@@ -265,6 +283,7 @@ class PacketDisassembler extends Module {
 
     when (stateOut === s_idle) {
       done := true.B
+      busy := false.B
       data := 0.U(8.W).asBools()
     }
   }.otherwise {

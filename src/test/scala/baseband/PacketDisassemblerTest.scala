@@ -33,7 +33,8 @@ class PacketDisassemblerTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.constants.channelIndex.poke("b000000".U)
 
       inDriver.push(inBits.map(x => (new DecoupledTX(UInt(1.W))).tx(x.U)))
-      controlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
+      controlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+        .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
 
       c.clock.step(400)
 
@@ -66,7 +67,8 @@ class PacketDisassemblerTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.constants.channelIndex.poke((scala.util.Random.nextInt(62) + 1).U) // Poke random 6 bit value (not 0)
 
       inDriver.push(inBits.map(x => (new DecoupledTX(UInt(1.W))).tx(x.U)))
-      controlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle).Lit(_.aa -> aa.U)))
+      controlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+        .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
 
       c.clock.step(400)
 
