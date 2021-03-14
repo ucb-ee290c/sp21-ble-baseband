@@ -32,8 +32,8 @@ HB_coeff = [2 * np.sin(i * pi / 2) * HB_coeff[i] for i in range(0, len(HB_coeff)
 
 #HB_coeff = [0.0, 0.0, 0.0, 0.002, 0.0, 0.008, 0.0, 0.026, 0.0, 0.068, 0.0, 0.17, 0.0, 0.6212, 0.0, -0.6212, 0.0, -0.17, 0.0, -0.068, 0.0, -0.026, 0.0, -0.008, 0.0, -0.002, 0.0, 0.0, 0.0]
 
-HB_coeff = [FixedPoint(c, True, 1, 11) for c in HB_coeff]
-print([c.__float__() for c in HB_coeff])
+HB_coeff = [FixedPoint(c, True, 1, 11, str_base=2) for c in HB_coeff]
+print(['b' + str(c) for c in HB_coeff])
 def butter_lowpass(cutoff, fs, order=5):
     sos = signal.butter(10, cutoff, 'lp', fs=fs, output='sos')
     return sos
