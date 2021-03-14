@@ -8,7 +8,7 @@ object BasebandISA {
 
   /* Configure command:
       Configure baseband constants. If secondaryInst = CONFIG_LO_LUT, the data field holds the
-      LO LUT address to be set, else the data field is a Don't Care.
+      LO LUT address to be set in the form {[0 for FSK / 1 for CT], 6-bit address}, else the data field is a Don't Care.
       [ Data = <LO LUT address / X> | secondaryInst = <target constant> | primaryInst = 0 ]
       [ additionalData = <value> ]
    */
