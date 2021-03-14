@@ -113,19 +113,22 @@ I, Q = mix(lambda t: IM(t))
 I, Q = I(t), Q(t)
 I, Q = analog_lowpass(I, Q)
 result = ADC_sampling(I, MHz(20), analog_F_sample)
-#print("i = ", result[1])
+print("i = ", result[1])
 t = result[0]
 I = [s - 15 for s in result[1]]
 result = ADC_sampling(Q, MHz(20), analog_F_sample)
-#print("q = ", result[1])
+print("q = ", result[1])
 Q = [s - 15 for s in result[1]]
 I = [FixedPoint(s, True, 6, 0) for s in I]
 Q = [FixedPoint(s, True, 6, 0) for s in Q]
 
+data = [19, -3, -23, -28, -16, 6, 25, 28, 15, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -5, -22, -26, -14, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26, -16, 5, 23, 28, 17, -3, -22, -26]
+
 ht = hilbert_transform(Q)
+#plt.plot(list(range(len(data))), data)
 #plt.plot(t, ht)
 #plt.plot(t, Q)
-plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
+#plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
 #print([I[t] - ht[t] for t in range(len(t))])
 #plt.plot(t, I)
 plt.show()
