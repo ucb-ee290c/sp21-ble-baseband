@@ -14,7 +14,7 @@ class HilbertFilterControlInput extends Bundle {
 }
 
 class HilbertFilterOutput(bitWidth: Int) extends Bundle {
-  val data = Decoupled(SInt(6.W))
+  val data = Decoupled(SInt(7.W))
 }
 
 class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
@@ -73,8 +73,8 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   I_delay.io.out.ready := io.out.data.ready
 
   fir.io.in.valid := io.in.q.valid
-  fir.io.in.bits.data := Q_scaled.asFixedPoint(11.BP)
+  fir.io.in.bits.data := Q_scaled.asFixedPoint(0.BP)
   fir.io.out.ready := io.out.data.ready
   io.out.data.valid := I_delay.io.out.valid & fir.io.out.valid
-  io.out.data.bits := (fir.io.out.bits.data.asSInt() >> fir.io.out.bits.data.binaryPoint.get)(5, 0).asSInt()
+  io.out.data.bits := I_delay.io.out.bits -& (fir.io.out.bits.data.asSInt() >> fir.io.out.bits.data.binaryPoint.get)(5, 0).asSInt()
 }
