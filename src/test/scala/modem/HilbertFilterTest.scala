@@ -71,6 +71,48 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.out.data.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
+      while (i < mock_input_I_image.length) {
+        c.io.in.i.data.poke(mock_input_I_image(i).asUInt())
+        c.io.in.q.data.poke(mock_input_Q_image(i).asUInt())
+        c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.clock.step()
+       if (c.io.out.data.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+        i+=1
+      }
+      print("IMAGE:\n")
+      print(arr)
+      assert(true)
+    }
+  }
+
+  it should "Do something else" in {
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.out.data.ready.poke(1.B)
+      var arr = Seq[BigInt]()
+      var i = 0
+      while (i < mock_input_I_mixed.length) {
+        c.io.in.i.data.poke(mock_input_I_mixed(i).asUInt())
+        c.io.in.q.data.poke(mock_input_Q_mixed(i).asUInt())
+        c.io.in.q.valid.poke((i < mock_input_I_mixed.length).asBool())
+        c.io.in.i.valid.poke((i < mock_input_I_mixed.length).asBool())
+        c.clock.step()
+       if (c.io.out.data.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+        i+=1
+      }
+      print("MIXED:\n")
+      print(arr)
+      assert(true)
+    }
+  }
+
+  it should "Do something else again" in {
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.out.data.ready.poke(1.B)
+      var arr = Seq[BigInt]()
+      var i = 0
       while (i < mock_input_I_rf.length) {
         c.io.in.i.data.poke(mock_input_I_rf(i).asUInt())
         c.io.in.q.data.poke(mock_input_Q_rf(i).asUInt())
@@ -81,9 +123,10 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
           arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
         i+=1
       }
-      print("finished")
+      print("RF ONLY:\n")
       print(arr)
       assert(true)
     }
   }
+
 }
