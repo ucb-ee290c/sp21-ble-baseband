@@ -123,6 +123,11 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val q_filter_r8 = RegInit(0.U(4.W))
   val q_filter_r9 = RegInit(0.U(4.W))
 
+  val dac_t0 = RegInit(0.U(6.W))
+  val dac_t1 = RegInit(0.U(6.W))
+  val dac_t2 = RegInit(0.U(6.W))
+  val dac_t3 = RegInit(0.U(6.W))
+
   io.tuning.trim.g0 := trim_g0
   io.tuning.trim.g1 := trim_g1
   io.tuning.trim.g2 := trim_g2
@@ -160,6 +165,11 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.q.filter.r0 := q_filter_r7
   io.tuning.q.filter.r0 := q_filter_r8
   io.tuning.q.filter.r0 := q_filter_r9
+
+  io.tuning.dac.t0 := dac_t0
+  io.tuning.dac.t1 := dac_t1
+  io.tuning.dac.t2 := dac_t2
+  io.tuning.dac.t3 := dac_t3
 
 
   interrupts(0) := io.back.interrupt
@@ -217,7 +227,11 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
       RegField(4, q_filter_r7)),
     0x31 -> Seq(
       RegField(4, q_filter_r8),
-      RegField(4, q_filter_r9))
+      RegField(4, q_filter_r9)),
+    0x32 -> Seq(RegField(6, dac_t0)),
+    0x33 -> Seq(RegField(6, dac_t1)),
+    0x34 -> Seq(RegField(6, dac_t2)),
+    0x35 -> Seq(RegField(6, dac_t3))
   )
 }
 
@@ -251,52 +265,19 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
 
   val cmdQueue = Queue(basebandFrontend.module.io.back.cmd, params.cmdQueueDepth)
 
-  cmdQueue.ready := false.B
+  val controller = Module(new Controller(params, beatBytes))
+  controller.io.cmd <> cmdQueue
+  controller.io.dma.readReq <> dma.module.io.read.req
+  controller.io.dma.readResp <> dma.module.io.read.resp
 
-  //val controller = Module(new Controller(params.paddrBits, beatBytes))
+  val baseband = Module(new Baseband(params, beatBytes))
+  baseband.io.control <> controller.io.basebandControl
+  baseband.io.constants := controller.io.constants
+  baseband.io.dma.readData <> dma.module.io.read.queue
+  baseband.io.dma.writeReq <> dma.module.io.write.req
 
-  //controller.io.cmd <> cmdQueue
+  baseband.io.modem.tx.ready := false.B
+
+  baseband.io.modem.rx.valid := false.B
+  baseband.io.modem.rx.bits := 0.U
 }
-
-//class BLEBasebandModem(params: BLEBasebandModemParams)(implicit p: Parameters) extends LazyRoCC(opcodes = opcodes) {
-//  val beatBytes = p(SystemBusKey).beatBytes
-//
-//  val dma = new EE290CDMA(beatBytes, 258, "baseband")
-//
-//  override lazy val module = new BLEBasebandModemImp(this)
-//  val tlNode = dma.id_node
-//}
-//
-//class BLEBasebandModemImp(outer: BLEBasebandModem) extends LazyRoCCModuleImp(outer) with HasCoreParameters {
-//  val modemIO = IO(new Bundle {
-//    val modemClock = Input(Clock())
-//    val analog = new GFSKModemAnalogIO
-//  })
-//
-//  import outer.beatBytes
-//
-//  val interruptServicer = new InterruptServicer
-//  interruptServicer.io.cmd.in <> io.cmd
-//  io.resp <> interruptServicer.io.interrupt.resp
-//
-//  val cmdQueue = Queue(interruptServicer.io.cmd.out, 8) // TODO: should queue depth be a config?
-//
-//  val controller = new Controller(paddrBits, beatBytes)
-//  controller.io.cmd <> cmdQueue
-//
-//  val baseband = new Baseband(paddrBits, beatBytes)
-//  baseband.io.control <> controller.io.basebandControl
-//
-//  val basebandLoopback = new DecoupledLoopback(UInt(1.W))
-//  basebandLoopback.io.select := controller.io.constants.loopbackSelect(0) // TODO: define an object that contains macros for loopback bits
-//  basebandLoopback.io.left.in <> baseband.io.modem.tx
-//  baseband.io.modem.rx <> basebandLoopback.io.left.out
-//
-////  val modem = new GFSKModem
-////  basebandLoopback.io.right.in <> modem.io.baseband.rx
-////  modem.io.baseband.tx <> basebandLoopback.io.right.out
-////
-////  modem.io.analog <> modemIO.analog
-////  modem.io.modemClock := modemIO.modemClock
-//}
-

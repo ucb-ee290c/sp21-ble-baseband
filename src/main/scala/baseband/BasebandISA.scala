@@ -7,8 +7,9 @@ object BasebandISA {
   // primaryInst values and corresponding instructions
 
   /* Configure command:
-      Configure baseband constants.
-      [ Data = X | secondaryInst = <target constant> | primaryInst = 0 ]
+      Configure baseband constants. If secondaryInst = CONFIG_LO_LUT, the data field holds the
+      LO LUT address to be set, else the data field is a Don't Care.
+      [ Data = <LO LUT address / X> | secondaryInst = <target constant> | primaryInst = 0 ]
       [ additionalData = <value> ]
    */
   val CONFIG_CMD = 0.U
@@ -18,6 +19,7 @@ object BasebandISA {
   val CONFIG_ACCESS_ADDRESS = 1.U
   val CONFIG_CHANNEL_INDEX = 2.U
   val CONFIG_ADDITIONAL_FRAME_SPACE = 3.U
+  val CONFIG_LO_LUT = 4.U
 
   /* Send command:
       Transmit a specified number of PDU header and data bytes. Bytes are gathered by loading them from the

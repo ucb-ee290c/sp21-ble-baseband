@@ -64,6 +64,12 @@ class GFSKModemTuningIO extends Bundle {
       val r9 = UInt(4.W)
     }
   }
+  val dac =  new Bundle {
+    val t0 = UInt(6.W)
+    val t1 = UInt(6.W)
+    val t2 = UInt(6.W)
+    val t3 = UInt(6.W)
+  }
 }
 
 class GFSKModem(params: BLEBasebandModemParams) extends Module {
