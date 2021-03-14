@@ -33,7 +33,7 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   var coeffs = Seq[String]("b000000000000", "b000000000000", "b000000000000", "b000000000100", "b000000000000", "b000000010000", "b000000000000", "b000000110100", "b000000000000", "b000010001011", "b000000000000", "b000101011100", "b000000000000", "b010011111000", "b000000000000", "b101100001000", "b000000000000", "b111010100100", "b000000000000", "b111101110101", "b000000000000", "b111111001100", "b000000000000", "b111111110000", "b000000000000", "b111111111100", "b000000000000", "b000000000000", "b000000000000").map(c => c.U.asFixedPoint(11.BP))
 
   val I_delay = Module (new GenericDelayChain(coeffs.length / 2, SInt((params.adcBits + 1).W)))
-  var fir = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(18.W, 11.BP), coeffs) )
+  var fir = Module( new GenericFIR(FixedPoint(12.W, 0.BP), FixedPoint(18.W, 11.BP), coeffs) )
 
   // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
   //io.in.i.data.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
@@ -45,7 +45,7 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   I_delay.io.out.ready := io.out.data.ready
 
   fir.io.in.valid := io.in.q.valid
-  fir.io.in.bits.data := Q_scaled.asFixedPoint(0.BP)
+  fir.io.in.bits.data := Cat(0.U(6.W), Q_scaled).asFixedPoint(0.BP)
   fir.io.out.ready := io.out.data.ready
   io.out.data.valid := I_delay.io.out.valid & fir.io.out.valid
   io.out.data.bits := (fir.io.out.bits.data.asSInt() >> fir.io.out.bits.data.binaryPoint.get)(5, 0).asSInt()
