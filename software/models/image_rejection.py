@@ -97,9 +97,8 @@ def analog_lowpass(I, Q):
     
 def hilbert_transform(Q):
     signal = Q
-    elements = [0 for _ in range(len(HB_coeff) // 2)]
+    elements = [0 for _ in range(len(HB_coeff))]
     elements.extend(signal)
-    elements.extend([0 for _ in range(len(HB_coeff) // 2)])
     result = []
     for i in range(len(signal)):
         e = 0
@@ -109,7 +108,7 @@ def hilbert_transform(Q):
     return result
 
 t = np.linspace(0, t_interval, num = int(analog_F_sample *t_interval))
-I, Q = mix(lambda t: IM(t))
+I, Q = mix(lambda t: RF(t))
 I, Q = I(t), Q(t)
 I, Q = analog_lowpass(I, Q)
 result = ADC_sampling(I, MHz(20), analog_F_sample)
@@ -128,7 +127,7 @@ ht = hilbert_transform(Q)
 #plt.plot(list(range(len(data))), data)
 #plt.plot(t, ht)
 #plt.plot(t, Q)
-#plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
+plt.plot(t, [(I[t] - ht[t]).__float__() for t in range(len(t))])
 #print([I[t] - ht[t] for t in range(len(t))])
 #plt.plot(t, I)
 plt.show()
