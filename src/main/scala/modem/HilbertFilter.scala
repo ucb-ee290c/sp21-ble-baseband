@@ -61,7 +61,7 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
     0.0).map(c => c.F(24.W, 11.BP))
 
   val I_delay = Module (new GenericDelayChain(coeffs.length / 2, SInt((params.adcBits + 1).W)))
-  var fir = Module( new GenericFIR(FixedPoint(24.W, 11.BP), FixedPoint(48.W, 22.BP), coeffs) )
+  var fir = Module( new GenericFIR(FixedPoint, FixedPoint, coeffs) )
 
   // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
   //io.in.i.data.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
