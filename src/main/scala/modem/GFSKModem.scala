@@ -10,6 +10,22 @@ class GFSKModemDigitalIO extends Bundle {
   val rx = Decoupled(UInt(1.W))
 }
 
+class AnalogTXIO extends Bundle {
+  val freqOffset = Output(UInt(8.W)) // TODO: Establish this value
+  val pllReady = Input(Bool())
+}
+
+class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
+  val i = new Bundle {
+    val data = Input(UInt(params.adcBits.W))
+    val valid = Input(Bool())
+  }
+  val q = new Bundle {
+    val data = Input(UInt(params.adcBits.W))
+    val valid = Input(Bool())
+  }
+}
+
 class GFSKModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
   val tx = new AnalogTXIO
   val rx = new AnalogRXIO(params)
@@ -75,7 +91,12 @@ class GFSKModemTuningIO extends Bundle {
 class GFSKModem(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
     val digital = new GFSKModemDigitalIO
-    val analog = new GFSKModemAnalogIO(params)
+    val analog = new Bundle {
+      val rx = new AnalogRXIO(params)
+      val tx = new Bundle {
+        val gfskIndex = Output(UInt(6.W))
+      }
+    }
   })
 
   val tx = Module(new GFSKTX())
@@ -83,6 +104,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
+  io.analog.tx.gfskIndex := tx.io.analog.gfskIndex
 
   val preModemLoopback = Module(new DecoupledLoopback(UInt(1.W)))
   preModemLoopback.io.select := true.B

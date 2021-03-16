@@ -282,8 +282,11 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   modem.io.analog.tx <> io.data.tx
   modem.io.analog.rx := modem.io.analog.rx
 
+  controller.io.analog.gfskIndex := modem.io.analog.tx.gfskIndex
+
   // Other off chip / analog IO
   io.tuning := basebandFrontend.io.tuning
   io.data.freqCenter := controller.io.analog.freqCenter
   io.data.pllD := controller.io.analog.pllD
+  io.data.tx.freqOffset := controller.io.analog.freqOffset
 }

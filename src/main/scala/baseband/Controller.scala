@@ -232,6 +232,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
       val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
     }
     val analog = new Bundle {
+      val gfskIndex = Input(UInt(6.W))
       val freqCenter = Output(UInt(8.W))
       val freqOffset = Output(UInt(8.W))
       val pllD = Output(UInt(6.W))
@@ -245,10 +246,6 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   )))
 
   io.constants := constants
-
-  // Analog IO
-  io.analog.freqCenter := constants.LOCT(constants.channelIndex)
-  io.analog.pllD := constants.channelIndex - (~(state === s_tx)).asUInt()
 
   val s_idle :: s_tx :: s_rx :: s_debug :: s_interrupt :: Nil = Enum(5)
 
@@ -285,6 +282,11 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   // Loopback Mask
   val loopbackMask = RegInit(0.U(4.W))
   io.basebandControl.loopback := loopbackMask(1,0).asBools()
+
+  // Analog IO
+  io.analog.freqCenter := constants.LOCT(constants.channelIndex)
+  io.analog.pllD := constants.channelIndex - (~(state === s_tx)).asUInt()
+  io.analog.freqOffset := constants.LOFSK(io.analog.gfskIndex)
 
   // Command wires
   io.cmd.ready := state === s_idle
