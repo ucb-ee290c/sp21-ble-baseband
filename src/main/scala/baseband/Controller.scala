@@ -235,7 +235,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
       val gfskIndex = Input(UInt(6.W))
       val freqCenter = Output(UInt(8.W))
       val freqOffset = Output(UInt(8.W))
-      val pllD = Output(UInt(6.W))
+      val pllD = Output(UInt(11.W))
     }
   })
 
@@ -285,7 +285,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
 
   // Analog IO
   io.analog.freqCenter := constants.LOCT(constants.channelIndex)
-  io.analog.pllD := constants.channelIndex - (~(state === s_tx)).asUInt()
+  io.analog.pllD := 1200.U + constants.channelIndex + (state === s_tx).asUInt()
   io.analog.freqOffset := constants.LOFSK(io.analog.gfskIndex)
 
   // Command wires
