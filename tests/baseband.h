@@ -1,0 +1,25 @@
+// Address map
+#define BASEBAND_INSTRUCTION 0x8000
+#define BASEBAND_ADDITIONAL_DATA 0x8004
+#define BASEBAND_STATUS0 0x8008
+#define BASEBAND_STATUS1 0x800C
+#define BASEBAND_STATUS2 0x8010
+#define BASEBAND_STATUS3 0x8014
+#define BASEBAND_STATUS4 0x8018
+
+// Instruction macro
+#define BASEBAND_INSTRUCTION(primaryInst, secondaryInst, data) ((primaryInst & 0xF) + ((secondaryInst & 0xF0) << 4) + ((data & 0xFFFFFF00) << 24))
+
+// Primary instructions
+#define BASEBAND_CONFIG 1
+#define BASEBAND_SEND 2
+#define BASEBAND_RECEIVE 3
+#define BASEBAND_RECEIVE_EXIT 4
+#define BASEBAND_DEBUG 15
+
+// Secondary instructions
+#define BASEBAND_CONFIG_CRC_SEED 0
+#define BASEBAND_CONFIG_ACCESS_ADDRESS 1
+#define BASEBAND_CONFIG_CHANNEL_INDEX 2
+#define BASEBAND_CONFIG_ADDITIONAL_FRAME_SPACE 3
+#define BASEBAND_CONFIG_LO_LUT 4

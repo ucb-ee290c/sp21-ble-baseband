@@ -306,7 +306,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
             txControllerCmd.addr := io.cmd.bits.additionalData
             state := s_tx
           }
-          is (BasebandISA.RECEIVE_CMD) {
+          is (BasebandISA.RECEIVE_START_CMD) {
             rxControllerCmdValid := true.B
             rxControllerCmd.command := PDAControlInputCommands.START_CMD
             rxControllerCmd.addr := io.cmd.bits.additionalData
