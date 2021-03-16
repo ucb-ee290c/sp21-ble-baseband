@@ -306,18 +306,16 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
               is (BasebandISA.CONFIG_CHANNEL_INDEX) {
                 constants.channelIndex := io.cmd.bits.additionalData(5, 0)
               }
-              is (BasebandISA.CONFIG_IMAGE_COMBINE_OP) {
-                constants.imageRejectionCombOp := io.cmd.bits.additionalData(0)
+              is (BasebandISA.CONFIG_IMAGE_REJECTION_OP) {
+                constants.imageRejecionOp := io.cmd.bits.additionalData(0).asBool()
               }
-              is (BasebandISA.CONFIG_LO_LUT) { // write an entry into the LUTs for the LO
-                switch (io.cmd.bits.inst.data(6)) { // 7th bit refers to which LUT to write to
-                  val addr = io.cmd.bits.inst.data(5, 0) // the 6 bit address in the LUT
-                  is (0.U) { // Write to the FSK LUT
-                    constants.LOFSK(addr) := io.cmd.bits.additionalData(7, 0);
-                  }
-                  is (1.U) { // Write to the Coarse Tuning LUT
-                    constants.LOCT(addr) := io.cmd.bits.additionalData(7, 0);
-                  }
+              is (BasebandISA.CONFIG_LO_LUT) { // Write an entry into the LUTs for the LO
+                val addr = io.cmd.bits.inst.data(5, 0) // The 6 bit address in the LUT
+                when (io.cmd.bits.inst.data(6) === 1.U) { // 7th bit refers to which LUT to write to
+                  // Write to the Coarse Tuning LUT
+                  constants.LOCT(addr) := io.cmd.bits.additionalData(7, 0)
+                }.otherwise {
+                  constants.LOFSK(addr) := io.cmd.bits.additionalData(7, 0) // Write to the FSK LUT
                 }
               }
             }

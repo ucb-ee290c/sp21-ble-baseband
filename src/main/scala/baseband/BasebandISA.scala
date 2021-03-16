@@ -18,7 +18,7 @@ object BasebandISA {
   val CONFIG_CRC_SEED = 0.U
   val CONFIG_ACCESS_ADDRESS = 1.U
   val CONFIG_CHANNEL_INDEX = 2.U
-  val CONFIG_IMAGE_COMBINE_OP = 3.U // configure the combination operation used in image rejection
+  val CONFIG_IMAGE_REJECTION_OP = 3.U // Configure the combination operation used in image rejection
   val CONFIG_LO_LUT = 4.U
 
   /* Send command:
