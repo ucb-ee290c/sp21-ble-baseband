@@ -259,25 +259,30 @@ class BLEBasebandModem(params: BLEBasebandModemParams, beatBytes: Int)(implicit 
 class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer: BLEBasebandModem)(implicit p: Parameters) extends LazyModuleImp(outer) {
   val io = dontTouch(IO(new BLEBasebandModemAnalogIO(params)))
 
-  import outer._
+  val basebandFrontend = outer.basebandFrontend.module
+  val dma = outer.dma.module
 
-  basebandFrontend.module.io.back.interrupt := false.B
+  basebandFrontend.io.back.interrupt := false.B
 
-  val cmdQueue = Queue(basebandFrontend.module.io.back.cmd, params.cmdQueueDepth)
+  val cmdQueue = Queue(basebandFrontend.io.back.cmd, params.cmdQueueDepth)
 
   val controller = Module(new Controller(params, beatBytes))
   controller.io.cmd <> cmdQueue
-  controller.io.dma.readReq <> dma.module.io.read.req
-  controller.io.dma.readResp <> dma.module.io.read.resp
+  controller.io.dma.readReq <> dma.io.read.req
+  controller.io.dma.readResp <> dma.io.read.resp
 
   val baseband = Module(new Baseband(params, beatBytes))
   baseband.io.control <> controller.io.basebandControl
   baseband.io.constants := controller.io.constants
-  baseband.io.dma.readData <> dma.module.io.read.queue
-  baseband.io.dma.writeReq <> dma.module.io.write.req
+  baseband.io.dma.readData <> dma.io.read.queue
+  baseband.io.dma.writeReq <> dma.io.write.req
 
-  baseband.io.modem.tx.ready := false.B
+  val modem = Module(new GFSKModem(params))
+  modem.io.digital.tx <> baseband.io.modem.tx
+  modem.io.analog.tx <> io.data.tx
+  modem.io.analog.rx := modem.io.analog.rx
 
-  baseband.io.modem.rx.valid := false.B
-  baseband.io.modem.rx.bits := 0.U
+  // Other off chip / analog IO
+  io.tuning := basebandFrontend.io.tuning
+  io.data.freqCenter := modem.io.analog.freqCenter
 }

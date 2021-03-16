@@ -19,10 +19,15 @@ class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
 class GFSKRX(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
     val analog = new Bundle {
-      val rx = new AnalogRXIO(params)
+      val i = Flipped(Decoupled(UInt(params.adcBits.W)))
+      val q = Flipped(Decoupled(UInt(params.adcBits.W)))
     }
     val digital = new Bundle {
       val out = Decoupled(UInt(1.W))
     }
   })
+
+  io.digital.out.valid := false.B
+  io.analog.i.ready := false.B
+  io.analog.q.ready := false.B
 }
