@@ -234,6 +234,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
     val analog = new Bundle {
       val freqCenter = Output(UInt(8.W))
       val freqOffset = Output(UInt(8.W))
+      val pllD = Output(UInt(6.W))
     }
   })
 
@@ -245,7 +246,9 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
 
   io.constants := constants
 
+  // Analog IO
   io.analog.freqCenter := constants.LOCT(constants.channelIndex)
+  io.analog.pllD := constants.channelIndex - (~(state === s_tx)).asUInt()
 
   val s_idle :: s_tx :: s_rx :: s_debug :: s_interrupt :: Nil = Enum(5)
 

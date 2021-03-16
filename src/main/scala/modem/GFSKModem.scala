@@ -14,6 +14,7 @@ class GFSKModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
   val tx = new AnalogTXIO
   val rx = new AnalogRXIO(params)
   val freqCenter = Output(UInt(8.W))
+  val pllD = Output(UInt(6.W))
 }
 
 class GFSKModemTuningIO extends Bundle {
