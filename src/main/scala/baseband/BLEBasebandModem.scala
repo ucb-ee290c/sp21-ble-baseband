@@ -285,4 +285,5 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   // Other off chip / analog IO
   io.tuning := basebandFrontend.io.tuning
   io.data.freqCenter := controller.io.analog.freqCenter
+  io.data.pllD := controller.io.analog.pllD
 }
