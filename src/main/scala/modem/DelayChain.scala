@@ -13,13 +13,13 @@ class GenericDelayChain[T<:Data](cycles: Int, t: T) extends Module {
 
   val delayRegisters = Seq.fill(cycles) {Module(new GenericDelayChainCell(t)).io}
 
-  delayRegisters.head.in := io.in
+  delayRegisters.head.in <> io.in
 
   for ((current, next) <- delayRegisters.zip(delayRegisters.tail)) {
-    next.in := current.out
+    next.in <> current.out
   }
 
-  io.out := delayRegisters.last.out
+  io.out <> delayRegisters.last.out
 }
 
 class GenericDelayChainCell[T<:Data](t: T) extends Module {
