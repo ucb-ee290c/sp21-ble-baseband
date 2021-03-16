@@ -231,6 +231,10 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
       val readReq = Decoupled(new EE290CDMAReaderReq(params.paddrBits, params.maxReadSize))
       val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
     }
+    val analog = new Bundle {
+      val freqCenter = Output(UInt(8.W))
+      val freqOffset = Output(UInt(8.W))
+    }
   })
 
   val constants = RegInit(new BasebandConstants, WireInit(new BasebandConstants().Lit(
@@ -240,6 +244,8 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   )))
 
   io.constants := constants
+
+  io.analog.freqCenter := constants.LOCT(constants.channelIndex)
 
   val s_idle :: s_tx :: s_rx :: s_debug :: s_interrupt :: Nil = Enum(5)
 

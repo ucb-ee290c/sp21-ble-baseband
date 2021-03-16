@@ -3,14 +3,7 @@ package modem
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{AsyncQueue, AsyncQueueParams}
-import baseband.{BLEBasebandModemParams, BasebandConstants, DecoupledLoopback}
-import chisel3.experimental.BundleLiterals.AddBundleLiteralConstructor
-
-
-class ModemConstants extends Bundle {
-  val LOFSK = Vec(64, UInt(8.W))
-  val LOCT = Vec(64, UInt(8.W))
-}
+import baseband.{BLEBasebandModemParams, DecoupledLoopback}
 
 class GFSKModemDigitalIO extends Bundle {
   val tx = Flipped(Decoupled(UInt(1.W)))
@@ -82,16 +75,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
     val digital = new GFSKModemDigitalIO
     val analog = new GFSKModemAnalogIO(params)
-    val basebandConstants = Input(new BasebandConstants)
   })
-
-  val constants = RegInit(new ModemConstants, WireInit(new ModemConstants().Lit(
-    _.LOCT -> VecInit(Seq.fill(64)(0.U(8.W))),
-    _.LOFSK -> VecInit(Seq.fill(64)(0.U(8.W)))
-
-  )))
-
-  io.analog.freqCenter := constants.LOCT(io.basebandConstants.channelIndex)
 
   val tx = Module(new GFSKTX())
   val rx = Module(new GFSKRX(params))
