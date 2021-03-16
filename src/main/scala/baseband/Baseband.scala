@@ -12,7 +12,7 @@ class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
   val crcSeed = UInt(24.W)
   val accessAddress = UInt(32.W)
-  val additionalFrameSpace = UInt(32.W)
+  val imageRejectionCombOp= Bool()
   val LOFSK = Vec(64, UInt(8.W))
   val LOCT = Vec(64, UInt(8.W))
 }
