@@ -29,31 +29,53 @@ class FixedPointTester extends Module {
 class AGCTest extends AnyFlatSpec with ChiselScalatestTester {
   val f = 2000000 // 2 MHz IF
   val fs = 20000000 // 20 MHz Sampling Frequency
+
   it should "Elaborate an AGC" in {
     test(new AGC(BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.control.idealPeakToPeak.poke(121.U)
+      c.io.control.idealPeakToPeak.poke(128.U)
       c.io.control.sampleWindow.poke(1.U)
-      c.io.control.gain.poke((0.99).F(8.W, 6.BP))
+      c.io.control.gain.poke((1.0).F(8.W, 6.BP))
+      c.io.adcIn.valid.poke(true.B)
 
-      for (amplitude <- Seq(0.5, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5)) {
-        println(s"Amplitude: $amplitude")
-        c.io.adcIn.valid.poke(true.B)
-        for (i <- 0 until 40) {
-          val sinPoint = (amplitude * scala.math.sin(2 * scala.math.Pi * f * (i.toDouble / fs))) + 1
-          val sample = if (sinPoint > 2) {
-            255
-          } else if (sinPoint < 0) {
-            0
-          } else {
-            scala.math.round(sinPoint * 127.5)
-          }
-          println(sample)
-          c.io.adcIn.bits.poke(sample.U)
-          c.clock.step()
+      var amplitudes = Seq[Double]()
+      var amplitude = 1.5
+      for (i <- 0 until 500) {
+        val sinPoint = (amplitude * scala.math.sin(2 * scala.math.Pi * f * (i.toDouble / fs))) + 1
+        val sample = if (sinPoint > 2) {
+          255
+        } else if (sinPoint < 0) {
+          0
+        } else {
+          scala.math.round(sinPoint * 127.5)
         }
-        c.io.adcIn.valid.poke(false.B)
+        c.io.adcIn.bits.poke(sample.U)
         c.clock.step()
+        val lutIndex = c.io.vgaLUTIndex.peek().litValue().toInt
+        val signedLUTIndex = (lutIndex & 0xF) - (lutIndex & 0x10)
+        amplitude = amplitude * (1 - (math.signum(signedLUTIndex) * ((signedLUTIndex * signedLUTIndex * 0.1)/256)))
+        amplitudes = amplitudes :+ amplitude
       }
+
+      // Jump signal strength down
+      amplitude = 0.1
+      for (i <- 0 until 500) {
+        val sinPoint = (amplitude * scala.math.sin(2 * scala.math.Pi * f * (i.toDouble / fs))) + 1
+        val sample = if (sinPoint > 2) {
+          255
+        } else if (sinPoint < 0) {
+          0
+        } else {
+          scala.math.round(sinPoint * 127.5)
+        }
+        c.io.adcIn.bits.poke(sample.U)
+        c.clock.step()
+        val lutIndex = c.io.vgaLUTIndex.peek().litValue().toInt
+        val signedLUTIndex = (lutIndex & 0xF) - (lutIndex & 0x10)
+        amplitude = amplitude * (1 - (math.signum(signedLUTIndex) * ((signedLUTIndex * signedLUTIndex * 0.1)/256)))
+        amplitudes = amplitudes :+ amplitude
+      }
+
+      println(amplitudes)
     }
   }
 

@@ -40,8 +40,6 @@ class ACGMaxMinCell(dataBits: Int) extends Module {
 
 class AGCIO(params: BLEBasebandModemParams) extends Bundle {
   val adcIn = Flipped(Valid(UInt(params.adcBits.W)))
-  val epsilon = Output(UInt((params.adcBits + 1).W))
-  val gainProduct = Output(FixedPoint(17.W, 6.BP))
   val vgaLUTIndex = Output(UInt(5.W))
   val control = new Bundle {
     val sampleWindow = Input(UInt(log2Ceil(params.agcMaxWindow).W))
@@ -71,6 +69,8 @@ class AGC(params: BLEBasebandModemParams) extends Module {
   val io = IO(new AGCIO(params))
 
   withReset(io.reset) {
+    val gainProductIntegral = RegInit(0.F(20.W, 6.BP))
+
     val maxMinBlocks = Seq.fill(params.cyclesPerSymbol * params.agcMaxWindow)(Module(new ACGMaxMinCell(params.adcBits)).io)
 
     maxMinBlocks.head.data.in <> io.adcIn
@@ -92,18 +92,28 @@ class AGC(params: BLEBasebandModemParams) extends Module {
         (i+1).U -> (maxMinBlocks(index).max.out - maxMinBlocks(index).min.out)
       }))
 
+    val peakToPeakValid = MuxLookup(io.control.sampleWindow, 1.U,
+      Array.tabulate(params.agcMaxWindow)(i => {
+        val index = ((i + 1) * params.cyclesPerSymbol - 1)
+        (i+1).U -> maxMinBlocks(index).data.out.valid
+      }))
+
     // To insure proper signed interpretation, we prepend each unsigned value with a 0 before subtraction
     val epsilon = Cat(0.U(1.W), peakToPeak) - Cat(0.U(1.W), io.control.idealPeakToPeak)
-
-    io.epsilon := epsilon // Testing pin
 
     // FixedPoint<17><<6>>
     val gainProduct = epsilon.asFixedPoint(0.BP) * io.control.gain
 
-    io.gainProduct := gainProduct // Testing pin
+    when (peakToPeakValid.asBool()) {
+      gainProductIntegral := gainProductIntegral + io.gainProduct
+    }
 
-    io.vgaLUTIndex := gainProduct.asUInt().apply(gainProduct.getWidth - 1, gainProduct.getWidth - 5) // Get 5 MSB of gain product
-    // Note based on a target of 128.U and a max gain of 1, the top 2 bits of this product will always be 00 or 11 to reflect the sign of the product
+    // Normalized selection range around a center of 128 (assuming 8 bit ADC input) and gain of 1
+    // This range is placed to to encapsulate the MSBs of the largest possible values (-128, 127)
+    // The device cannot be more sensitive than this.
+    // If the center is changed, the gain must be changed such that the (min, max) possible values are in the range (-128,127)
+    // Once the device is in this max sensitivity state, sensitivity can be decreased by reducing the gain.
+    io.vgaLUTIndex := gainProduct.asUInt().apply(gainProduct.getWidth - 4, gainProduct.getWidth - 8)
   }
 }
 
