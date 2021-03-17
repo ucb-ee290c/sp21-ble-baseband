@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{AsyncQueue, AsyncQueueParams}
 import baseband.{BLEBasebandModemParams, DecoupledLoopback}
+import chisel3.experimental.FixedPoint
 
 class GFSKModemDigitalIO extends Bundle {
   val tx = Flipped(Decoupled(UInt(1.W)))
@@ -31,6 +32,27 @@ class GFSKModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
   val rx = new AnalogRXIO(params)
   val freqCenter = Output(UInt(8.W))
   val pllD = Output(UInt(11.W))
+}
+
+class GFSKModemTuningControlIO extends Bundle {
+  val i = new Bundle {
+    val vgaAtten = new Bundle {
+      val reset = Bool()
+      val useAGC = Bool()
+      val sampleWindow = UInt(3.W) // TODO: should be parameterized
+      val idealPeakToPeak = UInt(8.W) // TODO: should be parameterized
+      val gain = FixedPoint(8.W, 6.BP)
+    }
+  }
+  val q = new Bundle {
+    val vgaAtten = new Bundle {
+      val reset = Bool()
+      val useAGC = Bool()
+      val sampleWindow = UInt(3.W) // TODO: should be parameterized
+      val idealPeakToPeak = UInt(8.W) // TODO: should be parameterized
+      val gain = FixedPoint(8.W, 6.BP)
+    }
+  }
 }
 
 class GFSKModemTuningIO extends Bundle {
@@ -80,7 +102,7 @@ class GFSKModemTuningIO extends Bundle {
       val r9 = UInt(4.W)
     }
   }
-  val dac = new Bundle {
+  val dac = new Bundle { // Offset correction connects to here
     val t0 = UInt(6.W)
     val t1 = UInt(6.W)
     val t2 = UInt(6.W)

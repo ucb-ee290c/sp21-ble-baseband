@@ -2,61 +2,112 @@ package modem
 
 import chisel3._
 import chisel3.util._
-
 import baseband.BLEBasebandModemParams
+import chisel3.experimental.FixedPoint
 
-class AGCAverageCell(inputBits: Int, outputBits: Int) extends Module {
+class ACGMaxMinCell(dataBits: Int) extends Module {
   val io = IO(new Bundle {
     val data = new Bundle {
-      val in = Flipped(Valid(UInt(inputBits.W)))
-      val out = Valid(UInt(inputBits.W))
+      val in = Flipped(Valid(UInt(dataBits.W)))
+      val out = Valid(UInt(dataBits.W))
     }
-    val sum = new Bundle {
-      val in = Input(UInt(outputBits.W))
-      val out = Output(UInt(outputBits.W))
+    val max = new Bundle {
+      val in = Input(UInt(dataBits.W))
+      val out = Output(UInt(dataBits.W))
+    }
+    val min = new Bundle {
+      val in = Input(UInt(dataBits.W))
+      val out = Output(UInt(dataBits.W))
     }
   })
 
-  val dataReg = RegInit(0.U(inputBits.W))
+  val minReg = RegInit((scala.math.pow(2, dataBits) - 1).toInt.U(dataBits.W))
+  val maxReg = RegInit(0.U(dataBits.W))
   val validReg = RegInit(false.B)
 
   when(io.data.in.fire()) {
-    dataReg := io.data.in.bits
+    minReg := io.data.in.bits
+    maxReg := io.data.in.bits
     validReg := io.data.in.valid
   }
 
-  io.data.out.bits := dataReg
+  io.data.out.bits := minReg
   io.data.out.valid := validReg
 
-  io.sum.out := io.sum.in + dataReg
+  io.min.out := Mux(minReg < io.min.in, minReg, io.min.in)
+  io.max.out := Mux(maxReg > io.max.in, maxReg, io.max.in)
 }
 
-class AGCIO(adcBits: Int) extends Bundle {
-  val adcIn = Flipped(Valid(UInt(adcBits.W)))
-  val vgaAttenuation = Output(UInt(5.W))
+class AGCIO(params: BLEBasebandModemParams) extends Bundle {
+  val adcIn = Flipped(Valid(UInt(params.adcBits.W)))
+  val epsilon = Output(UInt((params.adcBits + 1).W))
+  val gainProduct = Output(FixedPoint(17.W, 6.BP))
+  val vgaLUTIndex = Output(UInt(5.W))
+  val control = new Bundle {
+    val sampleWindow = Input(UInt(log2Ceil(params.agcMaxWindow).W))
+    val idealPeakToPeak = Input(UInt(params.adcBits.W))
+    val gain = Input(FixedPoint(8.W, 6.BP))
+  }
   val reset = Input(Bool())
 }
 
+/* Notes:
+RMS > Peak to peek > max
+RMS is fir with coeffienct = current value
+
+Window: Make it adjustable through a memory mapped register
+1 period of the IF frequency (2 MHz) on (200 MHz) gives some number of cycles is min
+max is 5 periods (make it memory mapped adjustable)
+
+RMS value gets error calculation relative to ideal RMS (memory mapped)
+make gain memory mapped ( < 1 ) (fixed point)
+goes to IF gain table (LUT) (ask Kerry how many settings he has)
+
+20 bits take MSB of the Fixed point value
+
+make two for I and Q
+ */
 class AGC(params: BLEBasebandModemParams) extends Module {
-  val io = IO(new AGCIO(params.adcBits))
+  val io = IO(new AGCIO(params))
 
-  val avgRange = 6
   withReset(io.reset) {
-    val cells = Seq.fill(avgRange)(Module(new AGCAverageCell(params.adcBits, log2Ceil(avgRange) + params.adcBits)).io)
+    val maxMinBlocks = Seq.fill(params.cyclesPerSymbol * params.agcMaxWindow)(Module(new ACGMaxMinCell(params.adcBits)).io)
 
-    cells.head.data.in <> io.adcIn
-    cells.head.sum.in := 0.U // Initial sum value
+    maxMinBlocks.head.data.in <> io.adcIn
+    maxMinBlocks.head.max.in := 0.U
+    maxMinBlocks.head.min.in := (scala.math.pow(2, params.adcBits) - 1).toInt.U
 
-    cells
-      .zip(cells.tail)
+    maxMinBlocks
+      .zip(maxMinBlocks.tail)
       .foreach {
         case (left, right) =>
           right.data.in <> left.data.out
-          right.sum.in := left.sum.out
+          right.max.in := left.max.out
+          right.min.in := left.min.out
       }
 
-    io.vgaAttenuation := cells.last.sum.out(4,0)
+    val peakToPeak = MuxLookup(io.control.sampleWindow, 1.U,
+      Array.tabulate(params.agcMaxWindow)(i => {
+        val index = ((i + 1) * params.cyclesPerSymbol - 1)
+        (i+1).U -> (maxMinBlocks(index).max.out - maxMinBlocks(index).min.out)
+      }))
+
+    // To insure proper signed interpretation, we prepend each unsigned value with a 0 before subtraction
+    val epsilon = Cat(0.U(1.W), peakToPeak) - Cat(0.U(1.W), io.control.idealPeakToPeak)
+
+    io.epsilon := epsilon // Testing pin
+
+    // FixedPoint<17><<6>>
+    val gainProduct = epsilon.asFixedPoint(0.BP) * io.control.gain
+
+    io.gainProduct := gainProduct // Testing pin
+
+    io.vgaLUTIndex := gainProduct.asUInt().apply(gainProduct.getWidth - 1, gainProduct.getWidth - 5) // Get 5 MSB of gain product
+    // Note based on a target of 128.U and a max gain of 1, the top 2 bits of this product will always be 00 or 11 to reflect the sign of the product
   }
-
-
 }
+
+/* DC offset loop (valid only)
+Integrate over input (forever), apply gain, LUT, back to analog
+ADC input minus half goes into integrator goes into truncation (MSB) into LUT
+ */

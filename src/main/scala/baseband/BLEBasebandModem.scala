@@ -15,10 +15,12 @@ case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
   paddrBits: Int = 32,
   maxReadSize: Int = 258,
-  adcBits: Int = 5,
+  adcBits: Int = 8,
   adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
-  modemQueueDepth: Int = 128)
+  modemQueueDepth: Int = 128,
+  cyclesPerSymbol: Int = 10,
+  agcMaxWindow: Int = 5)
 
 case object BLEBasebandModemKey extends Field[Option[BLEBasebandModemParams]](None)
 
@@ -44,6 +46,7 @@ class BLEBasebandModemStatus extends Bundle {
   val status3 = UInt(32.W)
   val status4 = UInt(32.W)
 }
+
 class BLEBasebandModemBackendIO extends Bundle {
   val cmd = Decoupled(new BLEBasebandModemCommand)
   val status = Input(new BLEBasebandModemStatus)
@@ -53,6 +56,7 @@ class BLEBasebandModemBackendIO extends Bundle {
 trait BLEBasebandModemFrontendBundle extends Bundle {
   val back = new BLEBasebandModemBackendIO
   val tuning = Output(new GFSKModemTuningIO)
+  val tuningControl = Output(new GFSKModemTuningControlIO)
 }
 
 trait BLEBasebandModemFrontendModule extends HasRegMap {
@@ -100,6 +104,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val mixer_r3 = RegInit(0.U(4.W))
 
   val i_vgaAtten = RegInit(0.U(5.W))
+  val i_vgaAtten_reset = RegInit(false.B)
+  val i_vgaAtten_useAGC = RegInit(false.B)
+  val i_vgaAtten_sampleWindow = RegInit(1.U(3.W))
+  val i_vgaAtten_idealPeakToPeak = RegInit(128.U(8.W)) // TODO: Verify initial value
+  val i_vgaAtten_gain = RegInit(32.U(8.W)) // TODO: Verify initial value
+
   val i_filter_r0 = RegInit(0.U(4.W))
   val i_filter_r1 = RegInit(0.U(4.W))
   val i_filter_r2 = RegInit(0.U(4.W))
@@ -112,6 +122,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val i_filter_r9 = RegInit(0.U(4.W))
 
   val q_vgaAtten = RegInit(0.U(5.W))
+  val q_vgaAtten_reset = RegInit(false.B)
+  val q_vgaAtten_useAGC = RegInit(false.B)
+  val q_vgaAtten_sampleWindow = RegInit(1.U(3.W))
+  val q_vgaAtten_idealPeakToPeak = RegInit(128.U(8.W)) // TODO: Verify initial value
+  val q_vgaAtten_gain = RegInit(32.U(8.W)) // TODO: Verify initial value
+
   val q_filter_r0 = RegInit(0.U(4.W))
   val q_filter_r1 = RegInit(0.U(4.W))
   val q_filter_r2 = RegInit(0.U(4.W))
@@ -143,6 +159,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.mixer.r3 := mixer_r3
 
   io.tuning.i.vgaAtten := i_vgaAtten
+  io.tuningControl.i.vgaAtten.reset := i_vgaAtten_reset
+  io.tuningControl.i.vgaAtten.useAGC := i_vgaAtten_useAGC
+  io.tuningControl.i.vgaAtten.sampleWindow := i_vgaAtten_sampleWindow
+  io.tuningControl.i.vgaAtten.idealPeakToPeak := i_vgaAtten_idealPeakToPeak
+  io.tuningControl.i.vgaAtten.gain := i_vgaAtten_gain.asFixedPoint(6.BP)
+
   io.tuning.i.filter.r0 := i_filter_r0
   io.tuning.i.filter.r0 := i_filter_r1
   io.tuning.i.filter.r0 := i_filter_r2
@@ -155,6 +177,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.i.filter.r0 := i_filter_r9
 
   io.tuning.q.vgaAtten := q_vgaAtten
+  io.tuningControl.q.vgaAtten.reset := q_vgaAtten_reset
+  io.tuningControl.q.vgaAtten.useAGC := q_vgaAtten_useAGC
+  io.tuningControl.q.vgaAtten.sampleWindow := q_vgaAtten_sampleWindow
+  io.tuningControl.q.vgaAtten.idealPeakToPeak := q_vgaAtten_idealPeakToPeak
+  io.tuningControl.q.vgaAtten.gain := q_vgaAtten_gain.asFixedPoint(6.BP)
+
   io.tuning.q.filter.r0 := q_filter_r0
   io.tuning.q.filter.r0 := q_filter_r1
   io.tuning.q.filter.r0 := q_filter_r2
@@ -197,41 +225,51 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
       RegField(4, mixer_r2),
       RegField(4, mixer_r3)),
     0x26 -> Seq(RegField(5, i_vgaAtten)),
-    0x27 -> Seq(
+    0x27 -> Seq(RegField(1, i_vgaAtten_reset)),
+    0x28 -> Seq(RegField(1, i_vgaAtten_useAGC)),
+    0x29 -> Seq(RegField(3, i_vgaAtten_sampleWindow)),
+    0x2A -> Seq(RegField(8, i_vgaAtten_idealPeakToPeak)),
+    0x2B -> Seq(RegField(8, i_vgaAtten_gain)),
+    0x2C -> Seq(
       RegField(4, i_filter_r0),
       RegField(4, i_filter_r1)),
-    0x28 -> Seq(
+    0x2D -> Seq(
       RegField(4, i_filter_r2),
       RegField(4, i_filter_r3)),
-    0x29 -> Seq(
+    0x2E -> Seq(
       RegField(4, i_filter_r4),
       RegField(4, i_filter_r5)),
-    0x2A -> Seq(
+    0x2F -> Seq(
       RegField(4, i_filter_r6),
       RegField(4, i_filter_r7)),
-    0x2B -> Seq(
+    0x30 -> Seq(
       RegField(4, i_filter_r8),
       RegField(4, i_filter_r9)),
-    0x2C -> Seq(RegField(5, q_vgaAtten)),
-    0x2D -> Seq(
+    0x31 -> Seq(RegField(5, q_vgaAtten)),
+    0x32 -> Seq(RegField(1, q_vgaAtten_reset)),
+    0x33 -> Seq(RegField(1, q_vgaAtten_useAGC)),
+    0x34 -> Seq(RegField(3, q_vgaAtten_sampleWindow)),
+    0x35 -> Seq(RegField(8, q_vgaAtten_idealPeakToPeak)),
+    0x36 -> Seq(RegField(8, q_vgaAtten_gain)),
+    0x37 -> Seq(
       RegField(4, q_filter_r0),
       RegField(4, q_filter_r1)),
-    0x2E -> Seq(
+    0x38 -> Seq(
       RegField(4, q_filter_r2),
       RegField(4, q_filter_r3)),
-    0x2F -> Seq(
+    0x39 -> Seq(
       RegField(4, q_filter_r4),
       RegField(4, q_filter_r5)),
-    0x30 -> Seq(
+    0x3A -> Seq(
       RegField(4, q_filter_r6),
       RegField(4, q_filter_r7)),
-    0x31 -> Seq(
+    0x3B -> Seq(
       RegField(4, q_filter_r8),
       RegField(4, q_filter_r9)),
-    0x32 -> Seq(RegField(6, dac_t0)),
-    0x33 -> Seq(RegField(6, dac_t1)),
-    0x34 -> Seq(RegField(6, dac_t2)),
-    0x35 -> Seq(RegField(6, dac_t3))
+    0x3C -> Seq(RegField(6, dac_t0)),
+    0x3D -> Seq(RegField(6, dac_t1)),
+    0x3E -> Seq(RegField(6, dac_t2)),
+    0x3F -> Seq(RegField(6, dac_t3))
   )
 }
 
@@ -285,7 +323,13 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   controller.io.analog.gfskIndex := modem.io.analog.tx.gfskIndex
 
   // Other off chip / analog IO
-  io.tuning := basebandFrontend.io.tuning
+  io.tuning.trim := basebandFrontend.io.tuning.trim
+  io.tuning.mixer := basebandFrontend.io.tuning.mixer
+  io.tuning.i.filter := basebandFrontend.io.tuning.i.filter
+  io.tuning.q.filter := basebandFrontend.io.tuning.q.filter
+  //io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.vgaAtten.useAGC, controller.io.analog.vgaAtten.i, basebandFrontend.io.tuning.i.vgaAtten)
+  //io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.vgaAtten.useAGC, controller.io.analog.vgaAtten.q, basebandFrontend.io.tuning.q.vgaAtten)
+
   io.data.freqCenter := controller.io.analog.freqCenter
   io.data.pllD := controller.io.analog.pllD
   io.data.tx.freqOffset := controller.io.analog.freqOffset
