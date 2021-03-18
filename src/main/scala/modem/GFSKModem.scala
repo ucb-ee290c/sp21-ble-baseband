@@ -3,16 +3,20 @@ package modem
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util.{AsyncQueue, AsyncQueueParams}
-import baseband.{BLEBasebandModemParams, DecoupledLoopback}
+import baseband.{BLEBasebandModemParams, BasebandISA, DecoupledLoopback}
 import chisel3.experimental.FixedPoint
 
 class GFSKModemDigitalIO extends Bundle {
   val tx = Flipped(Decoupled(UInt(1.W)))
   val rx = Decoupled(UInt(1.W))
+  val lutIO = new GFSKModemLUTIO
 }
 
 class AnalogTXIO extends Bundle {
-  val freqOffset = Output(UInt(8.W)) // TODO: Establish this value
+  val LUTOut = new Bundle {
+    val freqCenter = Output(UInt(8.W))
+    val freqOffset = Output(UInt(8.W))
+  }
   val pllReady = Input(Bool())
 }
 
@@ -30,7 +34,6 @@ class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
 class GFSKModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
   val tx = new AnalogTXIO
   val rx = new AnalogRXIO(params)
-  val freqCenter = Output(UInt(8.W))
   val pllD = Output(UInt(11.W))
 }
 
@@ -113,20 +116,39 @@ class GFSKModemTuningIO extends Bundle {
 class GFSKModem(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
     val digital = new GFSKModemDigitalIO
-    val analog = new Bundle {
-      val rx = new AnalogRXIO(params)
-      val tx = new Bundle {
-        val gfskIndex = Output(UInt(6.W))
+    val analog = new GFSKModemAnalogIO(params)
+    val gfskIndex = Output(UInt(6.W))
+  })
+
+  val LUTs = new GFSKModemLUTs
+  /*
+  Manage various SW set LUTs
+   */
+
+
+  when (io.digital.lutIO.setLUTCmd.fire()) { // Write an entry into the LUTs for the LO
+    val lut = io.digital.lutIO.setLUTCmd.bits.lut
+    val address = io.digital.lutIO.setLUTCmd.bits.address
+    val value = io.digital.lutIO.setLUTCmd.bits.value
+    switch(lut) {
+      is(LUT.LOFSK) {
+        LUTs.LOFSK(address) := value(7, 0)
+      }
+      is(LUT.LOCT) {
+        LUTs.LOCT(address) := value(7, 0)
       }
     }
-  })
+  }
+
+  io.analog.tx.LUTOut.freqCenter := LUTs.LOCT(0.U) // TODO: correctly address into the LUTS, need the appropriate signals...
+  io.analog.tx.LUTOut.freqOffset := LUTs.LOFSK(0.U)
 
   val tx = Module(new GFSKTX())
   val rx = Module(new GFSKRX(params))
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
-  io.analog.tx.gfskIndex := tx.io.analog.gfskIndex
+  io.gfskIndex := tx.io.analog.gfskIndex
 
   val preModemLoopback = Module(new DecoupledLoopback(UInt(1.W)))
   preModemLoopback.io.select := true.B

@@ -233,8 +233,6 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
     }
     val analog = new Bundle {
       val gfskIndex = Input(UInt(6.W))
-      val freqCenter = Output(UInt(8.W))
-      val freqOffset = Output(UInt(8.W))
       val pllD = Output(UInt(11.W))
     }
   })
@@ -284,9 +282,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   io.basebandControl.loopback := loopbackMask(1,0).asBools()
 
   // Analog IO
-  io.analog.freqCenter := constants.LOCT(constants.channelIndex)
-  io.analog.pllD := 1200.U + constants.channelIndex + (state === s_tx).asUInt()
-  io.analog.freqOffset := constants.LOFSK(io.analog.gfskIndex)
+  io.analog.pllD := 1200.U + constants.channelIndex + (state === s_tx).asUInt() // TODO: should this stay here to be aware of the TX state?
 
   // Command wires
   io.cmd.ready := state === s_idle
@@ -309,15 +305,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
               is (BasebandISA.CONFIG_IMAGE_REJECTION_OP) {
                 constants.imageRejecionOp := io.cmd.bits.additionalData(0).asBool()
               }
-              is (BasebandISA.CONFIG_LO_LUT) { // Write an entry into the LUTs for the LO
-                val addr = io.cmd.bits.inst.data(5, 0) // The 6 bit address in the LUT
-                when (io.cmd.bits.inst.data(6) === 1.U) { // 7th bit refers to which LUT to write to
-                  // Write to the Coarse Tuning LUT
-                  constants.LOCT(addr) := io.cmd.bits.additionalData(7, 0)
-                }.otherwise {
-                  constants.LOFSK(addr) := io.cmd.bits.additionalData(7, 0) // Write to the FSK LUT
-                }
-              }
+
             }
           }
           is (BasebandISA.SEND_CMD) {
