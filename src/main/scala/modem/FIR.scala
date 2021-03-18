@@ -59,7 +59,7 @@ class GenericFIR[T<:Data:Ring](genIn:T, genOut:T, coeffs: Seq[T]) extends Module
   val io = IO(GenericFIRIO(genIn, genOut))
 
   // Construct a vector of genericFIRDirectCells
-  val directCells = Seq.fill(coeffs.length){ Module(new GenericFIRDirectCell(genIn, genOut, coeffs.head)).io }
+  val directCells = Seq.tabulate(coeffs.length){ i: Int => Module(new GenericFIRDirectCell(genIn, genOut, coeffs(i))).io }
 
   // Construct the direct FIR chain
   for ((cell, coeff) <- directCells.zip(coeffs)) {
@@ -128,5 +128,9 @@ class GenericFIRDirectCell[T<:Data:Ring](genIn: T, genOut: T, c: T) extends Modu
   // Compute carry
   // This uses the ring implementation for + and *, i.e.
   // (a * b) maps to (Ring[T].prod(a, b)) for whicever T you use
-  io.out.bits.carry := inputReg * io.coeff + io.in.bits.carry
+  if (io.coeff.litValue() == 0) {
+    io.out.bits.carry := io.in.bits.carry
+  } else {
+    io.out.bits.carry := inputReg * io.coeff + io.in.bits.carry
+  }
 }
