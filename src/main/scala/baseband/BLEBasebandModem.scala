@@ -49,6 +49,7 @@ class BLEBasebandModemStatus extends Bundle {
 
 class BLEBasebandModemBackendIO extends Bundle {
   val cmd = Decoupled(new BLEBasebandModemCommand)
+  val setLUTCmd = Decoupled(new GFSKModemLUTCommand)
   val status = Input(new BLEBasebandModemStatus)
   val interrupt = Input(Bool())
 }
@@ -74,6 +75,15 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.back.cmd.bits.inst.secondaryInst := inst.bits(7, 4)
   io.back.cmd.bits.inst.data := inst.bits(31, 8)
   io.back.cmd.valid := inst.valid
+
+  // LUT set instruction from processor
+  val modemLUTInst = Decoupled(UInt(32.W))
+
+  modemLUTInst.ready := io.back.setLUTCmd.ready
+  io.back.setLUTCmd.bits.lut := modemLUTInst.bits(3, 0)
+  io.back.setLUTCmd.bits.address := modemLUTInst.bits(9, 4)
+  io.back.setLUTCmd.bits.value := modemLUTInst.bits(31, 10)
+  io.back.setLUTCmd.valid := modemLUTInst.valid
 
   // Status regs
   val status0 = RegInit(0.U(32.W))
@@ -269,7 +279,8 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x3C -> Seq(RegField(6, dac_t0)),
     0x3D -> Seq(RegField(6, dac_t1)),
     0x3E -> Seq(RegField(6, dac_t2)),
-    0x3F -> Seq(RegField(6, dac_t3))
+    0x3F -> Seq(RegField(6, dac_t3)),
+    0x40 -> Seq(RegField.w(32, modemLUTInst))
   )
 }
 
@@ -316,11 +327,12 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   baseband.io.dma.writeReq <> dma.io.write.req
 
   val modem = Module(new GFSKModem(params))
+  modem.io.digital.lutIO.setLUTCmd <> basebandFrontend.io.back.setLUTCmd
   modem.io.digital.tx <> baseband.io.modem.tx
   modem.io.analog.tx <> io.data.tx
   modem.io.analog.rx := modem.io.analog.rx
 
-  controller.io.analog.gfskIndex := modem.io.analog.tx.gfskIndex
+  controller.io.analog.gfskIndex := modem.io.gfskIndex
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim
@@ -330,7 +342,5 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   //io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.vgaAtten.useAGC, controller.io.analog.vgaAtten.i, basebandFrontend.io.tuning.i.vgaAtten)
   //io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.vgaAtten.useAGC, controller.io.analog.vgaAtten.q, basebandFrontend.io.tuning.q.vgaAtten)
 
-  io.data.freqCenter := controller.io.analog.freqCenter
-  io.data.pllD := controller.io.analog.pllD
-  io.data.tx.freqOffset := controller.io.analog.freqOffset
+  io.data <> modem.io.analog // attach modem analog out to the analog io
 }
