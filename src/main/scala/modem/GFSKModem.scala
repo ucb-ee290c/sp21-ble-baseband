@@ -17,7 +17,6 @@ class AnalogTXIO extends Bundle {
     val freqCenter = Output(UInt(8.W))
     val freqOffset = Output(UInt(8.W))
   }
-  val pllD = Output(UInt(11.W))
   val pllReady = Input(Bool())
 }
 
@@ -35,7 +34,6 @@ class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
 class GFSKModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
   val tx = new AnalogTXIO
   val rx = new AnalogRXIO(params)
-  val freqCenter = Output(UInt(8.W))
   val pllD = Output(UInt(11.W))
 }
 
@@ -142,7 +140,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
     }
   }
 
-  io.analog.tx.LUTOut.freqCenter := LUTs.LOCT(0.U) // TODO: correctly address into the LUTS
+  io.analog.tx.LUTOut.freqCenter := LUTs.LOCT(0.U) // TODO: correctly address into the LUTS, need the appropriate signals...
   io.analog.tx.LUTOut.freqOffset := LUTs.LOFSK(0.U)
 
   val tx = Module(new GFSKTX())

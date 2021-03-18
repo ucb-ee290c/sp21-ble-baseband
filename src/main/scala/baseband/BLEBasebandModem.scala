@@ -332,7 +332,7 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   modem.io.analog.tx <> io.data.tx
   modem.io.analog.rx := modem.io.analog.rx
 
-  controller.io.analog.gfskIndex := modem.io.gfskIndex
+  controller.io.analog.gfskIndex := modem.io.gfskIndex // TODO: necessary?
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim
@@ -342,5 +342,9 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   //io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.vgaAtten.useAGC, controller.io.analog.vgaAtten.i, basebandFrontend.io.tuning.i.vgaAtten)
   //io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.vgaAtten.useAGC, controller.io.analog.vgaAtten.q, basebandFrontend.io.tuning.q.vgaAtten)
 
-  io.data <> modem.io.analog // attach modem analog out to the analog io
+  // TODO: Refactor these signals
+  io.data.tx <> modem.io.analog.tx // attach modem analog out to the analog io
+  io.data.rx <> modem.io.analog.rx
+  io.data.pllD := controller.io.analog.pllD
+
 }
