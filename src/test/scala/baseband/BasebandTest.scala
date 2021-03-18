@@ -64,7 +64,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new BasebandDMAAddresser(addrBits, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriver = new DecoupledDriverMaster(c.clock, c.io.in)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.out, 0)
-      val addrDriver = new verif.ValidDriver(c.clock, c.io.baseAddr)
+      val addrDriver = new ValidDriverMaster(c.clock, c.io.baseAddr)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.out)
 
       for (_ <- 0 until 20) {
@@ -123,7 +123,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
       val outDMADriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val outDMAMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
-      val addrDriver = new verif.ValidDriver(c.clock, c.io.control.baseAddr)
+      val addrDriver = new ValidDriverMaster(c.clock, c.io.control.baseAddr)
 
       for (i <- 0 until tests) {
         c.io.constants.channelIndex.poke("b000000".U)
@@ -190,7 +190,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
       val outDMADriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val outDMAMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
-      val addrDriver = new verif.ValidDriver(c.clock, c.io.control.baseAddr)
+      val addrDriver = new ValidDriverMaster(c.clock, c.io.control.baseAddr)
 
       for (i <- 0 until tests) {
         c.io.constants.channelIndex.poke((scala.util.Random.nextInt(62) + 1).U) // Poke random 6 bit value (not 0)
@@ -258,7 +258,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
       val outDMADriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val outDMAMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
-      val addrDriver = new verif.ValidDriver(c.clock, c.io.control.baseAddr)
+      val addrDriver = new ValidDriverMaster(c.clock, c.io.control.baseAddr)
 
       for (i <- 0 until tests) {
         c.io.constants.channelIndex.poke("b000000".U)
@@ -325,7 +325,7 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
       val pdaInControlDriver = new DecoupledDriverMaster(c.clock, c.io.control.disassembler.in)
       val outDMADriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val outDMAMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
-      val addrDriver = new verif.ValidDriver(c.clock, c.io.control.baseAddr)
+      val addrDriver = new ValidDriverMaster(c.clock, c.io.control.baseAddr)
 
       for (_ <- 0 until 30) {
         c.io.constants.channelIndex.poke("b000000".U)

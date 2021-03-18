@@ -69,8 +69,6 @@ class AGC(params: BLEBasebandModemParams) extends Module {
   val io = IO(new AGCIO(params))
 
   withReset(io.reset) {
-    val gainProductIntegral = RegInit(0.F(20.W, 6.BP))
-
     val maxMinBlocks = Seq.fill(params.cyclesPerSymbol * params.agcMaxWindow)(Module(new ACGMaxMinCell(params.adcBits)).io)
 
     maxMinBlocks.head.data.in <> io.adcIn
@@ -92,21 +90,11 @@ class AGC(params: BLEBasebandModemParams) extends Module {
         (i+1).U -> (maxMinBlocks(index).max.out - maxMinBlocks(index).min.out)
       }))
 
-    val peakToPeakValid = MuxLookup(io.control.sampleWindow, 1.U,
-      Array.tabulate(params.agcMaxWindow)(i => {
-        val index = ((i + 1) * params.cyclesPerSymbol - 1)
-        (i+1).U -> maxMinBlocks(index).data.out.valid
-      }))
-
     // To insure proper signed interpretation, we prepend each unsigned value with a 0 before subtraction
     val epsilon = Cat(0.U(1.W), peakToPeak) - Cat(0.U(1.W), io.control.idealPeakToPeak)
 
     // FixedPoint<17><<6>>
     val gainProduct = epsilon.asFixedPoint(0.BP) * io.control.gain
-
-    when (peakToPeakValid.asBool()) {
-      gainProductIntegral := gainProductIntegral + io.gainProduct
-    }
 
     // Normalized selection range around a center of 128 (assuming 8 bit ADC input) and gain of 1
     // This range is placed to to encapsulate the MSBs of the largest possible values (-128, 127)
