@@ -128,9 +128,5 @@ class GenericFIRDirectCell[T<:Data:Ring](genIn: T, genOut: T, c: T) extends Modu
   // Compute carry
   // This uses the ring implementation for + and *, i.e.
   // (a * b) maps to (Ring[T].prod(a, b)) for whicever T you use
-  if (io.coeff.litValue() == 0) {
-    io.out.bits.carry := io.in.bits.carry
-  } else {
-    io.out.bits.carry := inputReg * io.coeff + io.in.bits.carry
-  }
+  io.out.bits.carry := inputReg * io.coeff + io.in.bits.carry
 }
