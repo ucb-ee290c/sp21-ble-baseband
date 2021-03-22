@@ -18,6 +18,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   })
 
   io.digital.out.valid := false.B
+  io.digital.out.bits := 0.U
   io.analog.i.ready := false.B
   io.analog.q.ready := false.B
 }

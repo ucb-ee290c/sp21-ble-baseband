@@ -3,19 +3,8 @@
 package modem
 
 import chisel3._
-import chisel3.experimental.FixedPoint
 import chisel3.util._
 import dsptools.numbers._
-import freechips.rocketchip.config.{Parameters, Field, Config}
-
-// FIR params
-case class GenericFIRParams(
-                             writeAddress: BigInt = 0x2000,
-                             readAddress: BigInt = 0x2100,
-                             depth: Int
-                           )
-
-case object GenericFIRKey extends Field[Option[GenericFIRParams]](None)
 
 class GenericFIRCellBundle[T<:Data:Ring](genIn:T, genOut:T) extends Bundle {
   val data: T = genIn.cloneType
@@ -53,8 +42,6 @@ object GenericFIRIO {
   def apply[T<:Data:Ring](genIn:T, genOut:T): GenericFIRIO[T] = new GenericFIRIO(genIn, genOut)
 }
 
-// A generic FIR filter
-// DOC include start: GenericFIR chisel
 class GenericFIR[T<:Data:Ring](genIn:T, genOut:T, coeffs: Seq[T]) extends Module {
   val io = IO(GenericFIRIO(genIn, genOut))
 
@@ -91,7 +78,6 @@ class GenericFIR[T<:Data:Ring](genIn:T, genOut:T, coeffs: Seq[T]) extends Module
   io.out.valid := directCells.last.out.valid
 
 }
-// DOC include end: GenericFIR chisel
 
 // A generic FIR direct cell used to construct a larger direct FIR chain
 //
@@ -120,7 +106,7 @@ class GenericFIRDirectCell[T<:Data:Ring](genIn: T, genOut: T, c: T) extends Modu
   }
 
   // We should output data when our cell has new data to output and is ready to
-  // recieve new data. This insures that every cell in the chain passes its data
+  // receive new data. This insures that every cell in the chain passes its data
   // on at the same time
   io.out.valid := hasNewData & io.in.fire()
   io.out.bits.data := inputReg

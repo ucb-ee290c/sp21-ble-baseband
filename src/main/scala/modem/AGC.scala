@@ -38,15 +38,17 @@ class ACGMaxMinCell(dataBits: Int) extends Module {
   io.max.out := Mux(maxReg > io.max.in, maxReg, io.max.in)
 }
 
+class AGCControlIO(val params: BLEBasebandModemParams) extends Bundle {
+  val sampleWindow = UInt(log2Ceil(params.agcMaxWindow).W)
+  val idealPeakToPeak = UInt(params.adcBits.W)
+  val gain = FixedPoint(8.W, 6.BP)
+  val reset = Bool()
+}
+
 class AGCIO(params: BLEBasebandModemParams) extends Bundle {
   val adcIn = Flipped(Valid(UInt(params.adcBits.W)))
   val vgaLUTIndex = Output(UInt(5.W))
-  val control = new Bundle {
-    val sampleWindow = Input(UInt(log2Ceil(params.agcMaxWindow).W))
-    val idealPeakToPeak = Input(UInt(params.adcBits.W))
-    val gain = Input(FixedPoint(8.W, 6.BP))
-  }
-  val reset = Input(Bool())
+  val control = Input(new AGCControlIO(params))
 }
 
 /* Notes:
@@ -68,7 +70,7 @@ make two for I and Q
 class AGC(params: BLEBasebandModemParams) extends Module {
   val io = IO(new AGCIO(params))
 
-  withReset(io.reset) {
+  withReset(io.control.reset) {
     val maxMinBlocks = Seq.fill(params.cyclesPerSymbol * params.agcMaxWindow)(Module(new ACGMaxMinCell(params.adcBits)).io)
 
     maxMinBlocks.head.data.in <> io.adcIn
@@ -104,8 +106,3 @@ class AGC(params: BLEBasebandModemParams) extends Module {
     io.vgaLUTIndex := gainProduct.asUInt().apply(gainProduct.getWidth - 4, gainProduct.getWidth - 8)
   }
 }
-
-/* DC offset loop (valid only)
-Integrate over input (forever), apply gain, LUT, back to analog
-ADC input minus half goes into integrator goes into truncation (MSB) into LUT
- */
