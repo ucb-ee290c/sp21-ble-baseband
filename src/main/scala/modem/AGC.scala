@@ -103,6 +103,6 @@ class AGC(params: BLEBasebandModemParams) extends Module {
     // The device cannot be more sensitive than this.
     // If the center is changed, the gain must be changed such that the (min, max) possible values are in the range (-128,127)
     // Once the device is in this max sensitivity state, sensitivity can be decreased by reducing the gain.
-    io.vgaLUTIndex := gainProduct.asUInt().apply(gainProduct.getWidth - 4, gainProduct.getWidth - 8)
+    io.vgaLUTIndex := gainProduct(gainProduct.getWidth - 4, gainProduct.getWidth - 8)
   }
 }

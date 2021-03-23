@@ -38,6 +38,6 @@ class DCO(params: BLEBasebandModemParams) extends Module {
     // FixedPoint<17><<6>>
     val gainProduct = integration.asFixedPoint(0.BP) * io.control.gain
 
-    io.dcoLUTIndex := gainProduct.asUInt().apply(gainProduct.getWidth - 1, gainProduct.getWidth - 5)
+    io.dcoLUTIndex := gainProduct(gainProduct.getWidth - 1, gainProduct.getWidth - 5)
   }
 }
