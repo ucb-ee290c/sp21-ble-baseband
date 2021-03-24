@@ -30,35 +30,7 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   val I_scaled = Wire(SInt((params.adcBits + 1).W))
   val Q_scaled = Wire(SInt((params.adcBits + 1).W))
 
-  var coeffs = Seq[Double](0.0,
-    0.0,
-    0.0,
-    0.002,
-    0.0,
-    0.008,
-    0.0,
-    0.026,
-    0.0,
-    0.068,
-    0.0,
-    0.17,
-    0.0,
-    0.6212,
-    0.0,
-    -0.6212,
-    0.0,
-    -0.17,
-    0.0,
-    -0.068,
-    0.0,
-    -0.026,
-    0.0,
-    -0.008,
-    0.0,
-    -0.002,
-    0.0,
-    0.0,
-    0.0).map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
+  var coeffs = FIRCoefficients.Hilbert.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
 
     val I_delay = Module (new GenericDelayChain(coeffs.length / 2 + 1, SInt((params.adcBits + 1).W)))
     var fir = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(18.W, 11.BP), coeffs) )

@@ -184,7 +184,7 @@ def modulate(data):
 		cycle = cycle + 1
 		data_idx = math.floor(cycle / (F_sample / F_symbol)) #queue equivalent
 
-	#plt.plot(range(cycle), wave, color='black')
+	plt.plot(range(cycle), wave, color='black')
 	plt.plot(range(cycle), data_wave, color='blue')
 	plt.plot(range(cycle), data_fir_wave, color='purple')
 	plt.show()
@@ -196,7 +196,7 @@ data = np.asarray(np.random.randint(2, size=20))
 #data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #data = [1, 1, 0, 0, 0, 1, 1, 1, 0,1]
 
-(wave, cycle, data_wave) = modulate(data) 
-coherent_demod(wave, cycle, data_wave)
-noncoherent_demod(wave, cycle, data_wave)
-
+#(wave, cycle, data_wave) = modulate(data)
+#coherent_demod(wave, cycle, data_wave)
+#noncoherent_demod(wave, cycle, data_wave)
+modulate(data)
