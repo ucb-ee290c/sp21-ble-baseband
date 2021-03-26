@@ -2,9 +2,8 @@ package modem
 
 import chisel3._
 import chisel3.util._
-
+import chisel3.experimental.{DataMirror, FixedPoint}
 import baseband.BLEBasebandModemParams
-
 
 class GFSKRX(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
