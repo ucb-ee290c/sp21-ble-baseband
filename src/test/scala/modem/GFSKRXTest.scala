@@ -25,7 +25,6 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
   val analog_F_sample = (F_LO * 2 + F_IF) * 2 + (0.5 * MHz)
   val time_interval = 0.0000001
   val symbol_time = 0.000001
-  val symbol_num = 10
   val digital_clock_F = 20 * MHz
 
   def analogLowpass(signal: Seq[Double], Fs: Double, Fc: Double): Seq[Double] = {
@@ -37,9 +36,9 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     filterForward(b, a, signal)
   }
 
-  def RFtoIF(in: Seq[Double]): (Seq[Double], Seq[Double]) = {
-    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * symbol_num).toInt)(_ * (1/(analog_F_sample)))
-    val rf = {t:Double => math.cos(2 * math.Pi * F_RF * t + math.Pi / 4)}
+  def RFtoIF(in: Seq[Boolean]): (Seq[Double], Seq[Double]) = {
+    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * in.size).toInt)(_ * (1/(analog_F_sample)))
+    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF + (if (in((t/symbol_time).floor)) -0.25 else 0.25) * MHz) * t + math.Pi / 4)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
     return (analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e},
@@ -47,9 +46,11 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "Elaborate a modem" in {
-    test(new GFSKRX(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.clock.step(10)
-      print(RFtoIF(Seq())._1)
+      val seq = Seq(true, false, true, false, true, false, true, false, true, false)
+      print(RFtoIF(seq)._1)
+      print(RFtoIF(seq)._2)
     }
   }
 }
