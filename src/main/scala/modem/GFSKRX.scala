@@ -16,10 +16,19 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
     }
   })
 
+  val imageRejection = Module (new HilbertFilter(params))
+  imageRejection.io.in.i := io.analog.i
+  imageRejection.io.in.q := io.analog.q
+
+  val bandpassF0 = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(19.W, 11.BP),
+    FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
+
+  val bandpassF1 = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(19.W, 11.BP),
+    FIRCoefficients.GFSKRX_Bandpass_F1.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
+
+
   io.digital.out.valid := false.B
   io.digital.out.bits := 0.U
-  io.analog.i.ready := false.B
-  io.analog.q.ready := false.B
 
 
 
