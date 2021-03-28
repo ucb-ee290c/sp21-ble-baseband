@@ -43,8 +43,9 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     val rf = {t:Double => math.cos(2 * math.Pi * (F_RF + in((t/(symbol_time/20)).floor.toInt)* 0.25 * MHz) * t + math.Pi / 4)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
-    return (analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e},
-      analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e})
+    (timeSteps.map{t:Double => in((t/(symbol_time/20)).floor.toInt)* 0.25 * MHz},Seq())
+    //return (analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e},
+     // analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e})
   }
 
   it should "Elaborate a modem" in {
