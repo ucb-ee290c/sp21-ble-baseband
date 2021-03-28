@@ -182,7 +182,7 @@ def modulate(data):
 	return wave, cycle, data_fir_wave
 
 # DATA
-data = np.asarray(np.random.randint(2, size=20))
+data = np.asarray(np.random.randint(2, size=10))
 #data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #data = [1, 1, 0, 0, 0, 1, 1, 1, 0,1]
 
@@ -190,5 +190,5 @@ data = np.asarray(np.random.randint(2, size=20))
 #coherent_demod(wave, cycle, data_wave)
 #noncoherent_demod(wave, cycle, data_wave)
 out = modulate(data)
-print(out[0])
+print(out[2])
 print(data)
