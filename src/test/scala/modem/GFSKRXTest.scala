@@ -40,7 +40,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   def RFtoIF(in: Seq[Boolean]): (Seq[Double], Seq[Double]) = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * 10).toInt)(_ * (1/(analog_F_sample)))
-    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF + (if (in((t/(symbol_time/20)).floor)) -0.25 else 0.25) * MHz) * t + math.Pi / 4)}
+    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF + (if (in((t/(symbol_time/20)).floor.toInt)) -0.25 else 0.25) * MHz) * t + math.Pi / 4)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
     return (analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e},
