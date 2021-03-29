@@ -12,10 +12,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import baseband.BLEBasebandModemParams
 import chisel3.experimental.FixedPoint
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
+import scala.collection.mutable.ListBuffer
 
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   var io = IO(new Bundle {
-    val in = new AnalogRXIO(params)
+    val in = new Bundle() {
+      val i = UInt(5.W)
+      val q = UInt(5.W)
+    }
     val out = new Bundle {
       val f0 = SInt(8.W)
       val f1 = SInt(8.W)
@@ -23,7 +27,10 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   })
 
   val hilbertFilter = Module(new HilbertFilter(params))
-  hilbertFilter.io.in <> io.in
+  hilbertFilter.io.in.i.data := io.in.i
+  hilbertFilter.io.in.i.valid := 1.B
+  hilbertFilter.io.in.q.data := io.in.i
+  hilbertFilter.io.in.q.valid := 1.B
 
   val bandpassF0 = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(19.W, 11.BP),
     FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
@@ -83,20 +90,18 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Elaborate a modem" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      var out = List()
+      var out = ListBuffer[BigInt]()
       val zipp = RFtoIF(Seq()).zipped
       val values = zipp.map{(i: Double, q:Double) => ((i - zipp.map{(i: Double, q:Double) => i}.min) / ((i - zipp.map{(i: Double, q:Double) => i}.max) - (i - zipp.map{(i: Double, q:Double) => i}.min)) * 31, (q - zipp.map{(i: Double, q:Double) => q}.min) / ((q - zipp.map{(i: Double, q:Double) => q}.max) - (q - zipp.map{(i: Double, q:Double) => q}.min)) * 31)}
       for (idx <- 0 to values.size) {
         val i = values(idx)._1
         val q = values(idx)._2
-        c.io.in.i.data.poke(i.toInt.U)
-        c.io.in.q.data.poke(q.toInt.U)
-        c.io.in.i.valid.poke(1.B)
-        c.io.in.q.valid.poke(1.B)
+        c.io.in.i.poke(i.toInt.U)
+        c.io.in.q.poke(q.toInt.U)
         c.clock.step()
-        out ++= List(c.io.out.f1.peek().litValue())
+        out += c.io.out.f1.peek().litValue()
       }
-      print(out)
+      print(out.toList)
     }
   }
 }
