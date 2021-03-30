@@ -12,6 +12,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import baseband.BLEBasebandModemParams
 import chisel3.experimental.FixedPoint
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
+
 import scala.collection.mutable.ListBuffer
 
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
@@ -79,29 +80,36 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     filterForward(b, a, signal)
   }
 
-  def RFtoIF(in: Seq[Double]): (Seq[Double], Seq[Double]) = {
+  def RFtoIF(in: Seq[Double]): Seq[(Double, Double)] = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * 10).toInt)(_ * (1/(analog_F_sample)))
     val rf = {t:Double => math.cos(2 * math.Pi * (F_RF - 0.25 * MHz) * t + math.Pi / 4)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
-    return (analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e},
-      analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e})
+    return analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz) zip analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz)
+  }
+  def analogToDigital(in: (Seq[(Double, Double)])): (Seq[(Int, Int)]) = {
+    val sampled = in.zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e}
+    return sampled.map{s: (Double, Double) => (((s._1 - sampled.map{s:(Double, Double) => s._1}.min) / (sampled.map{s:(Double, Double) => s._1}.max - sampled.map{s:(Double, Double) => s._1}.min) * 15).toInt+15,
+      ((s._2 - sampled.map{s:(Double, Double) => s._2}.min) / (sampled.map{s:(Double, Double) => s._2}.max - sampled.map{s:(Double, Double) => s._2}.min) * 15)).toInt+15)
+    }
   }
 
   it should "Elaborate a modem" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      var out = ListBuffer[BigInt]()
-      val zipp = RFtoIF(Seq()).zipped
-      val values = zipp.map{(i: Double, q:Double) => ((i - zipp.map{(i: Double, q:Double) => i}.min) / ((i - zipp.map{(i: Double, q:Double) => i}.max) - (i - zipp.map{(i: Double, q:Double) => i}.min)) * 15, (q - zipp.map{(i: Double, q:Double) => q}.min) / ((q - zipp.map{(i: Double, q:Double) => q}.max) - (q - zipp.map{(i: Double, q:Double) => q}.min)) * 15)}
-      for (idx <- 0 to (values.size-1)) {
-        val i = values(idx)._1
-        val q = values(idx)._2
-        c.io.in.i.poke((i.toInt+15).U)
-        c.io.in.q.poke((q.toInt+15).U)
+      var out0 = ListBuffer[BigInt]()
+      var out1 = ListBuffer[BigInt]()
+      val input = analogToDigital(RFtoIF(Seq()))
+      for (idx <- 0 to (input.size-1)) {
+        val i = input(idx)._1
+        val q = input(idx)._2
+        c.io.in.i.poke(i.U)
+        c.io.in.q.poke(q.U)
         c.clock.step()
-        out += c.io.out.f1.peek().litValue()
+        out0 += c.io.out.f0.peek().litValue()
+        out1 += c.io.out.f1.peek().litValue()
       }
-      print(out.toList)
+      print(out0.toList)
+      print(out1.toList)
     }
   }
 }
