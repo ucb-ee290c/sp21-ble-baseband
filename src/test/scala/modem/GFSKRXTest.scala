@@ -13,6 +13,7 @@ import baseband.BLEBasebandModemParams
 import chisel3.experimental.FixedPoint
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
+import verif._
 import scala.collection.mutable.ListBuffer
 /*
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
