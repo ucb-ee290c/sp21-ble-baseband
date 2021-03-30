@@ -72,8 +72,8 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_image.length) {
-        c.io.in.i.data.poke(mock_input_I_image(i).asUInt())
-        c.io.in.q.data.poke(mock_input_Q_image(i).asUInt())
+        c.io.in.i.bits.poke(mock_input_I_image(i).asUInt())
+        c.io.in.q.bits.poke(mock_input_Q_image(i).asUInt())
         c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
         c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
         c.clock.step()
@@ -93,8 +93,8 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_mixed.length) {
-        c.io.in.i.data.poke(mock_input_I_mixed(i).asUInt())
-        c.io.in.q.data.poke(mock_input_Q_mixed(i).asUInt())
+        c.io.in.i.bits.poke(mock_input_I_mixed(i).asUInt())
+        c.io.in.q.bits.poke(mock_input_Q_mixed(i).asUInt())
         c.io.in.q.valid.poke((i < mock_input_I_mixed.length).asBool())
         c.io.in.i.valid.poke((i < mock_input_I_mixed.length).asBool())
         c.clock.step()
@@ -114,8 +114,8 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_rf.length) {
-        c.io.in.i.data.poke(mock_input_I_rf(i).asUInt())
-        c.io.in.q.data.poke(mock_input_Q_rf(i).asUInt())
+        c.io.in.i.bits.poke(mock_input_I_rf(i).asUInt())
+        c.io.in.q.bits.poke(mock_input_Q_rf(i).asUInt())
         c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
         c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
         c.clock.step()
