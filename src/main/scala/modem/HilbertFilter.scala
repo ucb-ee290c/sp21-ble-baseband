@@ -18,7 +18,10 @@ class HilbertFilterOutput(bitWidth: Int) extends Bundle {
 }
 
 class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
-  val in = new AnalogRXIO(params)
+  val in = new Bundle {
+    val i = Flipped(Decoupled(UInt(params.adcBits.W)))
+    val q = Flipped(Decoupled(UInt(params.adcBits.W)))
+  }
   val out = new HilbertFilterOutput(6)
 }
 
@@ -37,8 +40,8 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
 
 //  // TODO: might need to add an additional bit in order to make sure that the fixed point value wont be negative
 //  //io.in.i.data.asFixedPoint(0.BP) // TODO: How does this conversion work? Does this produce an 8 bit FP with the integer component all above the point?
-    I_scaled := Cat(0.U(1.W), io.in.i.data).asSInt() - 15.S((params.adcBits +1).W)
-    Q_scaled := Cat(0.U(1.W), io.in.q.data).asSInt() - 15.S((params.adcBits +1).W)
+    I_scaled := Cat(0.U(1.W), io.in.i.bits).asSInt() - 15.S((params.adcBits +1).W)
+    Q_scaled := Cat(0.U(1.W), io.in.q.bits).asSInt() - 15.S((params.adcBits +1).W)
 //
   I_delay.io.in.valid :=  io.in.i.valid
   I_delay.io.in.bits := I_scaled
@@ -48,4 +51,6 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   fir.io.out.ready := io.out.data.ready
   io.out.data.valid := I_delay.io.out.valid & fir.io.out.valid
   io.out.data.bits := I_delay.io.out.bits -& (fir.io.out.bits.data.asSInt() >> fir.io.out.bits.data.binaryPoint.get)(5, 0).asSInt()
+  io.in.i.ready := I_delay.io.in.ready
+  io.in.q.ready := fir.io.in.ready
 }

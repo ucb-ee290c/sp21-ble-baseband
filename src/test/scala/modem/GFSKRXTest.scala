@@ -14,7 +14,7 @@ import chisel3.experimental.FixedPoint
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
 import scala.collection.mutable.ListBuffer
-
+/*
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   var io = IO(new Bundle {
     val in = Input(new Bundle() {
@@ -54,7 +54,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   io.out.f1 := bandpassF1.io.out.bits.data(18, 11).asSInt
 
 }
-
+*/
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   val gausFirData = Seq(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0015625, 0.0015625, 0.0078125, 0.0078125, 0.0234375, 0.0234375, 0.05625, 0.05625, 0.115625, 0.115625, 0.209375, 0.209375, 0.3359375, 0.3359375, 0.484375, 0.484375, 0.6328125, 0.6328125, 0.759375, 0.759375, 0.853125, 0.853125, 0.9125, 0.9125, 0.9453125, 0.9453125, 0.9609375, 0.9609375, 0.9671875, 0.9671875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.965625, 0.965625, 0.953125, 0.953125, 0.921875, 0.921875, 0.85625, 0.85625, 0.7375, 0.7375, 0.55, 0.55, 0.296875, 0.296875, 0.0, 0.0, -0.296875, -0.296875, -0.55, -0.55, -0.7375, -0.7375, -0.85625, -0.85625, -0.921875, -0.921875, -0.953125, -0.953125, -0.965625, -0.965625, -0.96875, -0.96875, -0.96875, -0.96875, -0.96875, -0.96875, -0.96875, -0.96875, -0.96875, -0.96875, -0.965625, -0.965625, -0.953125, -0.953125, -0.921875, -0.921875, -0.85625, -0.85625, -0.7375, -0.7375, -0.55, -0.55, -0.296875, -0.296875, 0.0, 0.0, 0.296875, 0.296875, 0.55, 0.55, 0.734375, 0.734375, 0.840625, 0.840625, 0.875, 0.875, 0.840625, 0.840625, 0.734375, 0.734375, 0.55, 0.55, 0.296875, 0.296875, 0.0, 0.0, -0.296875, -0.296875, -0.55, -0.55, -0.734375, -0.734375, -0.840625, -0.840625, -0.875, -0.875, -0.840625, -0.840625, -0.734375, -0.734375, -0.55, -0.55, -0.296875, -0.296875, 0.0, 0.0, 0.296875, 0.296875, 0.55, 0.55, 0.7375, 0.7375, 0.85625, 0.85625, 0.921875, 0.921875, 0.953125, 0.953125, 0.965625, 0.965625, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.96875, 0.965625, 0.965625, 0.953125, 0.953125, 0.921875, 0.921875, 0.85625, 0.85625, 0.7375, 0.7375, 0.55, 0.55, 0.296875, 0.296875, 0.0, 0.0, -0.296875, -0.296875, -0.55, -0.55, -0.7375, -0.7375, -0.85625, -0.85625, -0.921875, -0.921875)
@@ -97,23 +97,16 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   it should "Elaborate a modem" in {
-    test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      var out0 = ListBuffer[BigInt]()
-      var out1 = ListBuffer[BigInt]()
+    test(new GFSKRX(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
+      val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
+      val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
+      val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
       val input = analogToDigital(RFtoIF(Seq()))
-      for (idx <- 0 to (input.size-1)) {
-        val i = input(idx)._1
-        val q = input(idx)._2
-        c.io.in.i.poke(i.U)
-        c.io.in.q.poke(q.U)
-        c.clock.step()
-        out0 += c.io.out.f0.peek().litValue()
-        out1 += c.io.out.f1.peek().litValue()
-      }
-      //print(input.map{_._1})
-      //print(input.map{_._2})
-      print(out0.toList)
-      print(out1.toList)
+      inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
+      inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
+      c.clock.step(1000)
+      println(outMonitor.monitoredTransactions)
     }
   }
 }

@@ -16,6 +16,7 @@ class EnvelopeDetector(bitWidth: Int) extends Module {
 
   val integral = RegInit(0.F((bitWidth + 18).W, 15.BP))
 
+  /*
   // Targeting 20 MHz sample rate, minimum order equiripple, Apass = 1, Astop = 20
   val lowpassFixedPointWeights = Seq(0.021683193299446915092154597459739306942,
     -0.038569811057873895632219785056804539636,
@@ -192,7 +193,8 @@ class EnvelopeDetector(bitWidth: Int) extends Module {
   -0.038569811057873895632219785056804539636,
   0.021683193299446915092154597459739306942)
     .map(c => FixedPoint.fromDouble(c, 16.W, 15.BP))
-
+*/
+  val lowpassFixedPointWeights = FIRCoefficients.envelopeDetector.map(c => FixedPoint.fromDouble(c, 16.W, 15.BP))
   // TODO: Check the output width
   val lowpass = Module(new GenericFIR(FixedPoint((bitWidth + 1).W, 0.BP), FixedPoint((bitWidth + 18).W, 15.BP), lowpassFixedPointWeights))
   lowpass.io.in.valid := io.in.valid

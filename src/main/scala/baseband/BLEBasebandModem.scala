@@ -15,7 +15,7 @@ case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
   paddrBits: Int = 32,
   maxReadSize: Int = 258,
-  adcBits: Int = 8,
+  adcBits: Int = 5, // TODO this is only for testing should be 8
   adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
   modemQueueDepth: Int = 128,
