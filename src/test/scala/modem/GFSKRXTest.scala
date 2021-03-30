@@ -16,14 +16,14 @@ import scala.collection.mutable.ListBuffer
 
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   var io = IO(new Bundle {
-    val in = new Bundle() {
+    val in = Input(new Bundle() {
       val i = UInt(5.W)
       val q = UInt(5.W)
-    }
-    val out = new Bundle {
+    })
+    val out = Output(new Bundle {
       val f0 = SInt(8.W)
       val f1 = SInt(8.W)
-    }
+    })
   })
 
   val hilbertFilter = Module(new HilbertFilter(params))
@@ -38,19 +38,19 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   val bandpassF1 = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(19.W, 11.BP),
     FIRCoefficients.GFSKRX_Bandpass_F1.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
 
-  bandpassF0.io.in.bits := hilbertFilter.io.out.data.bits(6, 1).asFixedPoint(0.BP)
+  bandpassF0.io.in.bits.data := hilbertFilter.io.out.data.bits(6, 1).asFixedPoint(0.BP)
   hilbertFilter.io.out.data.ready := bandpassF0.io.in.ready
   bandpassF0.io.in.valid := hilbertFilter.io.out.data.valid
 
-  bandpassF1.io.in.bits := hilbertFilter.io.out.data.bits(6, 1).asFixedPoint(0.BP)
+  bandpassF1.io.in.bits.data := hilbertFilter.io.out.data.bits(6, 1).asFixedPoint(0.BP)
   hilbertFilter.io.out.data.ready := bandpassF1.io.in.ready
   bandpassF1.io.in.valid := hilbertFilter.io.out.data.valid
 
   bandpassF0.io.out.ready := 1.B
-  io.out.f0 := bandpassF0.io.out.bits.data.asSInt()(18, 11)
+  io.out.f0 := bandpassF0.io.out.bits.data(18, 11).asSInt
 
   bandpassF1.io.out.ready := 1.B
-  io.out.f1 := bandpassF1.io.out.bits.data.asSInt()(18, 11)
+  io.out.f1 := bandpassF1.io.out.bits.data(18, 11).asSInt
 
 }
 
@@ -81,7 +81,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   def RFtoIF(in: Seq[Double]): (Seq[Double], Seq[Double]) = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * 10).toInt)(_ * (1/(analog_F_sample)))
-    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF + 0.25 * MHz) * t + math.Pi / 4)}
+    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF - 0.25 * MHz) * t + math.Pi / 4)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
     return (analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz).zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e},
@@ -92,12 +92,12 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       var out = ListBuffer[BigInt]()
       val zipp = RFtoIF(Seq()).zipped
-      val values = zipp.map{(i: Double, q:Double) => ((i - zipp.map{(i: Double, q:Double) => i}.min) / ((i - zipp.map{(i: Double, q:Double) => i}.max) - (i - zipp.map{(i: Double, q:Double) => i}.min)) * 31, (q - zipp.map{(i: Double, q:Double) => q}.min) / ((q - zipp.map{(i: Double, q:Double) => q}.max) - (q - zipp.map{(i: Double, q:Double) => q}.min)) * 31)}
-      for (idx <- 0 to values.size) {
+      val values = zipp.map{(i: Double, q:Double) => ((i - zipp.map{(i: Double, q:Double) => i}.min) / ((i - zipp.map{(i: Double, q:Double) => i}.max) - (i - zipp.map{(i: Double, q:Double) => i}.min)) * 15, (q - zipp.map{(i: Double, q:Double) => q}.min) / ((q - zipp.map{(i: Double, q:Double) => q}.max) - (q - zipp.map{(i: Double, q:Double) => q}.min)) * 15)}
+      for (idx <- 0 to (values.size-1)) {
         val i = values(idx)._1
         val q = values(idx)._2
-        c.io.in.i.poke(i.toInt.U)
-        c.io.in.q.poke(q.toInt.U)
+        c.io.in.i.poke((i.toInt+15).U)
+        c.io.in.q.poke((q.toInt+15).U)
         c.clock.step()
         out += c.io.out.f1.peek().litValue()
       }
