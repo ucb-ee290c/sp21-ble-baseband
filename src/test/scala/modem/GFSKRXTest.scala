@@ -82,16 +82,18 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   def RFtoIF(in: Seq[Double]): Seq[(Double, Double)] = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * 10).toInt)(_ * (1/(analog_F_sample)))
-    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF - 0.25 * MHz) * t + math.Pi / 4)}
+    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF + 0.25 * MHz) * t + math.Pi / 4)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
     return analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz) zip analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz)
   }
   def analogToDigital(in: (Seq[(Double, Double)])): (Seq[(Int, Int)]) = {
     val sampled = in.zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e}
-    return sampled.map{s: (Double, Double) => (((s._1 - sampled.map{s:(Double, Double) => s._1}.min) / (sampled.map{s:(Double, Double) => s._1}.max - sampled.map{s:(Double, Double) => s._1}.min) * 15).toInt+15,
-      ((s._2 - sampled.map{s:(Double, Double) => s._2}.min) / (sampled.map{s:(Double, Double) => s._2}.max - sampled.map{s:(Double, Double) => s._2}.min) * 15)).toInt+15)
-    }
+    val maxI = sampled.map{_._1}.max
+    val maxQ = sampled.map{_._2}.max
+    val minI = sampled.map{_._1}.min
+    val minQ = sampled.map{_._2}.min
+    return sampled.map{s: (Double, Double) => (((s._1 - minI) / (maxI - minI) * 31).toInt, ((s._2 - minQ) / (maxQ - minQ) * 31).toInt)}
   }
 
   it should "Elaborate a modem" in {
@@ -108,6 +110,8 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
         out0 += c.io.out.f0.peek().litValue()
         out1 += c.io.out.f1.peek().litValue()
       }
+      //print(input.map{_._1})
+      //print(input.map{_._2})
       print(out0.toList)
       print(out1.toList)
     }
