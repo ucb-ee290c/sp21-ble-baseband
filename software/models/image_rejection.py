@@ -15,7 +15,7 @@ GHz = lambda f: f * 1000000
 
 channel_index = 0
 F_RF = MHz(2402 + 2 * channel_index) # 2.402 GHz
-F_IF = MHz(2.5)  # 2.5 MHz
+F_IF = MHz(2)  # 2.5 MHz
 F_LO = F_RF - F_IF # LO frequency is RF frequency - Intermediate Frequency
 F_IM = F_LO - F_IF # Image is on the other side of the LO
 analog_F_sample = (F_LO * 2 + F_IF) * 2
@@ -65,7 +65,7 @@ def fir(signal):
     return result[len(HB_coeff):]
 
 def RF(t):
-    return np.cos(2 * pi * (F_LO + F_IF) * t + pi / 4)
+    return np.cos(2 * pi * (F_LO + F_IF + 0.) * t + pi / 4)
     
 def IM(t):
     return np.cos(2 * pi * (F_LO - F_IF) * t + pi / 4)

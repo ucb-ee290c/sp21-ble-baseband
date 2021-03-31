@@ -18,7 +18,7 @@ F_sample = 20e6# 16MHz, sampling frequency
 # FIR Constants
 bts = 0.5
 oversampling_factor = 10 # FIR samples / symbol, must be a factor of F_cpu/F_symbol
-symbol_span = 3  # 6 symbols covered in FIR
+symbol_span = 2  # 6 symbols covered in FIR
 sampling_interval = (F_sample/F_symbol)/oversampling_factor # Number of cycles between samples
 
 
