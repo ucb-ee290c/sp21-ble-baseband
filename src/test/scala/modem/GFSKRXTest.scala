@@ -103,7 +103,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val input = analogToDigital(RFtoIF(Seq()))
+      val input = Seq.tabulate(10){i: Int =>(0.0,0.0)} ++analogToDigital(RFtoIF(Seq()))
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(1000)
