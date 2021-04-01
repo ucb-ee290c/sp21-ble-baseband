@@ -59,6 +59,4 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   io.digital.out.valid := beginSampling
   io.digital.out.bits := Mux(accumulator > 0.S, 1.U, 0.U)
 
-
-
 }
