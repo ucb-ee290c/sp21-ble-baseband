@@ -19,7 +19,7 @@ class EnvelopeDetector(bitWidth: Int) extends Module {
   lowpass.io.in.bits.data := Cat(0.U(1.W), io.in.bits.abs()).asFixedPoint(0.BP) // Take absolute value and ensure output as fixed point is interpreted properly
   io.in.ready := lowpass.io.in.ready
 
-  lowpass.io.out.ready := io.out.ready
+  lowpass.io.out.ready := 1.B
   io.out.valid := lowpass.io.out.valid
   io.out.bits := lowpass.io.out.bits.data.asUInt()(lowpass.io.out.bits.getWidth - 1, 15)
 }

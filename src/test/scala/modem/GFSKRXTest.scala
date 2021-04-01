@@ -80,22 +80,24 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
 
-  val gaussian_weights = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.015625, 0.0625, 0.15625, 0.328125, 0.59375,0.9375, 1.265625, 1.484375, 1.484375, 1.265625, 0.9375, 0.59375, 0.328125, 0.15625, 0.0625, 0.015625, 0.0, 0.0,0.0, 0.0, 0.0, 0.0, 0.0)
+  val gaussian_weights = Seq(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.015625, 0.0625, 0.15625, 0.328125, 0.59375,0.9375, 1.265625, 1.484375, 1.484375, 1.265625, 0.9375, 0.59375, 0.328125, 0.15625, 0.0625, 0.015625, 0.0, 0.0,0.0, 0.0, 0.0, 0.0, 0.0)
   def bitstream(in: Seq[Int]): Seq[Double] = {
-    in.flatMap{b: Int => Seq.tabulate(20){i: Int => if (b == 0) -1.0 else 1.0}}
+    in.flatMap{b: Int => Seq.tabulate(20){i: Int => (if (b == 0) -1.0 else 1.0)}}
   }
 
   def FIR(in: Seq[Double], coeff: Seq[Double]): Seq[Double] = {
     var samples = ListBuffer[Double]()
     return in.map { s: Double =>
       samples.prepend(s)
-      samples.zip(coeff).map {g: (Double, Double) => g._1 * g._2}.sum
+      samples.zip(coeff).map {g: (Double, Double) => g._1 * g._2}.sum / 10
     }
   }
 
-  def RFtoIF(in: Seq[Double]): Seq[(Double, Double)] = {
-    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * 10).toInt)(_ * (1/(analog_F_sample)))
-    val rf = {t:Double => math.cos(2 * math.Pi * (F_RF) * t + math.Pi / 4)}
+  def RFtoIF(in: Seq[Double], Fc: Double): Seq[(Double, Double)] = {
+    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length)).toInt)(_ * (1/(analog_F_sample)))
+
+    val rf = {t:Double => 
+	math.cos(2 * math.Pi * (Fc + (if (in((t / (symbol_time)).floor.toInt) == 1) 1 else -1) * 0.25 * MHz) * t)}
     val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
     val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
     return analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz) zip analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz)
@@ -115,11 +117,12 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val input = analogToDigital(RFtoIF(Seq()))
+      val input = analogToDigital(RFtoIF(Seq(1,0,1,0,1,0,1,0,1,0), F_RF))
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(1000)
       println(outMonitor.monitoredTransactions.map{_.data})
+      println(input)
     }
   }
 
@@ -127,6 +130,50 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new GFSKRX(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       println(bitstream(Seq(1,0,1,0,1,0,1,0,1,0)))
       println(FIR(bitstream(Seq(1,0,1,0,1,0,1,0,1,0)), gaussian_weights))
+    }
+  }
+
+  it should "PASS Radio Frequency" in {
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.out.data.ready.poke(1.B)
+      var arr = Seq[BigInt]()
+      var i = 0
+      val input = analogToDigital(RFtoIF(Seq(1,0,1,0,1,0,1,0,1,0), F_RF))
+      while (i < input.length) {
+        c.io.in.i.bits.poke(input(i)._1.asUInt())
+        c.io.in.q.bits.poke(input(i)._2.asUInt())
+        c.io.in.q.valid.poke((i < input.length).asBool())
+        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.clock.step()
+       if (c.io.out.data.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+        i+=1
+      }
+      print("Output:\n")
+      print(arr)
+      assert(true)
+    }
+  }
+
+  it should "REJECT IMAGE" in {
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.out.data.ready.poke(1.B)
+      var arr = Seq[BigInt]()
+      var i = 0
+      val input = analogToDigital(RFtoIF(FIR(bitstream(Seq(1,0,1,0,1,0,1,0,1,0)), gaussian_weights), F_IM))
+      while (i < input.length) {
+        c.io.in.i.bits.poke(input(i)._1.asUInt())
+        c.io.in.q.bits.poke(input(i)._2.asUInt())
+        c.io.in.q.valid.poke((i < input.length).asBool())
+        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.clock.step()
+       if (c.io.out.data.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+        i+=1
+      }
+      print("Output:\n")
+      print(arr)
+      assert(true)
     }
   }
 }
