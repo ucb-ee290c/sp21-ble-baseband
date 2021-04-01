@@ -159,8 +159,7 @@ def modulate(data):
 
 	#s(t) = A * cos(wF*t + phi(t))
 	#phi(t) = h*np.pi*integral of sum of impulse contributions
-
-
+	offset = []
 	# Operating from the perspective that each loop iteration is a clock cycle of the DAC
 	while (data_idx < len(data)):
 		val_i = data[data_idx]
@@ -170,6 +169,7 @@ def modulate(data):
 		phi_t = (fir_results * (1/F_sample)) + phi_t #a_i * (1/T_symbol) * (1/F_cpu) # 1/F_cpu is delta T 
 		s_t = A * np.cos(wF*(cycle/F_sample) + h*np.pi*phi_t)
 		wave.append(s_t)
+		offset.append(h*np.pi*phi_t)
 		data_wave.append(val_i)
 		cycle = cycle + 1
 		data_idx = math.floor(cycle / (F_sample / F_symbol)) #queue equivalent
@@ -179,7 +179,7 @@ def modulate(data):
 	plt.plot(range(cycle), data_fir_wave, color='purple')
 	plt.show()
 
-	return wave, cycle, data_fir_wave
+	return wave, cycle, data_fir_wave, offset
 
 # DATA
 data = np.asarray(np.random.randint(2, size=10))
@@ -190,5 +190,5 @@ data = np.asarray(np.random.randint(2, size=10))
 #coherent_demod(wave, cycle, data_wave)
 #noncoherent_demod(wave, cycle, data_wave)
 out = modulate(data)
-print(out[2])
+print(out[3])
 print(data)
