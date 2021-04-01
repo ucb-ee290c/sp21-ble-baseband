@@ -107,7 +107,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(1000)
-      println(outMonitor.monitoredTransactions)
+      println(outMonitor.monitoredTransactions.map{_.data})
     }
   }
 
