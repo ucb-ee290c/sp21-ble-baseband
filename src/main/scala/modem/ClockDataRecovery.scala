@@ -18,7 +18,7 @@ class KCounter extends Module {
   io.out.borrow := Counter(io.in.phaseError, 5)._2 // Down Counter
 }
 
-class DCO extends Module {
+class CDRDCO extends Module {
   def risingedge(x: Bool) = x && !RegNext(x)
   val io = IO(new Bundle {
     val in = Input(new Bundle {
@@ -48,7 +48,7 @@ class DCO extends Module {
     decDetected := 0.B
   }
 
-  io.out.clk := RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 10)._2))
+  io.out.clk := RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 5)._2))
 
 }
 
@@ -59,12 +59,12 @@ class CDR extends Module {
   })
 
   val kCounter = Module(new KCounter).io
-  val dco = Module(new DCO).io
+  val dco = Module(new CDRDCO).io
 
   kCounter.in.phaseError := io.d ^ dco.out.clk
   dco.in.inc := kCounter.out.carry
   dco.in.dec := kCounter.out.borrow
 
-  io.clk := dco.out.clk
+  io.clk := ShiftRegister(dco.out.clk, 15)
 
 }
