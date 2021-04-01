@@ -110,12 +110,4 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       println(outMonitor.monitoredTransactions.map{_.data})
     }
   }
-
-  it should "Image Reject" in {
-    test(new GFSKRX(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val input = analogToDigital(RFtoIF(Seq()))
-      println(input.map{_._1})
-      println(input.map{_._2})
-    }
-  }
 }

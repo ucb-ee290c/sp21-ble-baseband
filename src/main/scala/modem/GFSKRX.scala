@@ -47,7 +47,18 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   envelopeDetectorF0.io.out.ready := io.digital.out.ready
   envelopeDetectorF1.io.out.ready := io.digital.out.ready
 
-  io.digital.out.bits := Mux((Cat(0.U(1.W), envelopeDetectorF1.io.out.bits).asSInt() -& Cat(0.U(1.W), envelopeDetectorF0.io.out.bits).asSInt() > 0.S), 1.U, 0.U)
+  def risingedge(x: Bool) = x && !RegNext(x)
+  val guess = Wire(Bool())
+  val cdr = Module(new CDR)
+  val beginSampling = Wire(Bool())
+  guess := Mux((Cat(0.U(1.W), envelopeDetectorF1.io.out.bits).asSInt() -& Cat(0.U(1.W), envelopeDetectorF0.io.out.bits).asSInt()) > 0.S, 1.B, 0.B)
+  val accumulator = Wire(SInt(8.W))
+  accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(8.W))
+  cdr.io.d := guess
+  beginSampling := risingedge(cdr.io.clk)
+  io.digital.out.valid := beginSampling
+  io.digital.out.bits := Mux(accumulator > 0.S, 1.U, 0.U)
 
-  io.digital.out.valid := envelopeDetectorF0.io.out.valid & envelopeDetectorF1.io.out.valid
+
+
 }
