@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import butter, lfilter, freqz
 import math
+from fixedpoint import FixedPoint
 
 # Wave Constants
 A = 1
@@ -182,7 +183,7 @@ def modulate(data):
 	return wave, cycle, data_fir_wave, offset
 
 # DATA
-data = [0, 1] * 100
+data = [0, 1] * 5
 #data = np.asarray(np.random.randint(2, size=10))
 #data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #data = [1, 1, 0, 0, 0, 1, 1, 1, 0,1]
@@ -190,6 +191,7 @@ data = [0, 1] * 100
 #(wave, cycle, data_wave) = modulate(data)
 #coherent_demod(wave, cycle, data_wave)
 #noncoherent_demod(wave, cycle, data_wave)
+
 out = modulate(data)
-print(out[3])
-print(data)
+print([int(FixedPoint(s * 31, True, 6, 0, str_base=2)) for s in out[0]])
+plt.show()
