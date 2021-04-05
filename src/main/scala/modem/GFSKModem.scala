@@ -74,7 +74,7 @@ class GFSKModemTuningIO extends Bundle {
     val r3 = UInt(4.W)
   }
   val i = new Bundle {
-    val vgaAtten = UInt(5.W)
+    val vgaAtten = UInt(10.W)
     val filter = new Bundle {
       val r0 = UInt(4.W)
       val r1 = UInt(4.W)
@@ -89,7 +89,7 @@ class GFSKModemTuningIO extends Bundle {
     }
   }
   val q = new Bundle {
-    val vgaAtten = UInt(5.W)
+    val vgaAtten = UInt(10.W)
     val filter = new Bundle {
       val r0 = UInt(4.W)
       val r1 = UInt(4.W)
