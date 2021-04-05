@@ -14,8 +14,10 @@ class KCounter extends Module {
       val borrow = Bool()
     })
   })
-  io.out.carry := Counter(!io.in.phaseError, 5)._2 // Up Counter
-  io.out.borrow := Counter(io.in.phaseError, 5)._2 // Down Counter
+  val up = !io.in.phaseError
+  val down = io.in.phaseError
+  io.out.carry := Counter(up, 5)._2 // Up Counter
+  io.out.borrow := Counter(down, 5)._2 // Down Counter
 }
 
 class CDRDCO extends Module {
@@ -30,29 +32,32 @@ class CDRDCO extends Module {
     })
   })
 
-  val incDetected = RegInit(0.B)
-  val decDetected = RegInit(0.B)
+  val willInc = RegInit(0.B)
+  val willDec = RegInit(0.B)
 
   val toggleFF = Wire(Bool())
-  toggleFF := RegEnable(!toggleFF, 0.B, !(incDetected & !toggleFF | decDetected & toggleFF))
+  val shouldToggle = !(willInc & !toggleFF | willDec & toggleFF)
+  toggleFF := RegEnable(!toggleFF, 0.B, shouldToggle)
 
   when (risingedge(io.in.inc)) {
-    incDetected := 1.B
-  }.elsewhen(incDetected & !toggleFF) {
-    incDetected := 0.B
+    willInc := 1.B
+  }.elsewhen(!toggleFF) {
+    willInc := 0.B
   }
 
   when (risingedge(io.in.dec)) {
-    decDetected := 1.B
-  }.elsewhen(decDetected & toggleFF) {
-    decDetected := 0.B
+    willDec := 1.B
+  }.elsewhen(toggleFF) {
+    willDec := 0.B
   }
 
-  io.out.clk := RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 5)._2))
+  io.out.clk := !toggleFF & !clock.asBool()
+    //RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 5)._2))
 
 }
 
 class CDR extends Module {
+  def risingedge(x: Bool) = x && !RegNext(x)
   val io =  IO(new Bundle() {
     val d = Input(Bool())
     val clk = Output(Bool())
@@ -61,10 +66,10 @@ class CDR extends Module {
   val kCounter = Module(new KCounter).io
   val dco = Module(new CDRDCO).io
 
-  kCounter.in.phaseError := io.d ^ dco.out.clk
+  kCounter.in.phaseError := io.d ^ io.clk
   dco.in.inc := kCounter.out.carry
   dco.in.dec := kCounter.out.borrow
 
-  io.clk := ShiftRegister(dco.out.clk, 15)
+  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 10)._2))
 
 }

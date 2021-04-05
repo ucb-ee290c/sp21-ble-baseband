@@ -65,7 +65,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
   var sampled_Q = Q.toArray.zipWithIndex.collect {case (e, i) if i % (analog_F_sample / digital_clock_F).floor == 0 => e}
 */
 
-  it should "Do something" in {
+  it should "REJECT IMAGE" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.out.data.ready.poke(1.B)
       var arr = Seq[BigInt]()
@@ -80,9 +80,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
           arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
         i+=1
       }
-      print("IMAGE:\n")
-      print(arr)
-      assert(true)
+      assert(arr.max - arr.min < mock_input_I_image.max - mock_input_I_image.min)
     }
   }
 
@@ -103,7 +101,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       }
       print("MIXED:\n")
       print(arr)
-      assert(true)
+      assert(arr.max - arr.min > mock_input_I_mixed.max - mock_input_I_mixed.min)
     }
   }
 
@@ -124,7 +122,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       }
       print("RF ONLY:\n")
       print(arr)
-      assert(true)
+      assert(arr.max - arr.min > mock_input_I_rf.max - mock_input_I_rf.min)
     }
   }
 

@@ -183,7 +183,7 @@ def modulate(data):
 	return wave, cycle, data_fir_wave, offset
 
 # DATA
-data = [0, 1] * 5
+data = [0, 1] * 50 + [1,0,1,0,1,0,1,1,1,0,0,0,1,1,0,0,1,1,0,0,1,1,0,0]
 #data = np.asarray(np.random.randint(2, size=10))
 #data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #data = [1, 1, 0, 0, 0, 1, 1, 1, 0,1]
