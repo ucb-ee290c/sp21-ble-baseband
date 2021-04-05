@@ -51,6 +51,9 @@ class GFSKModemTuningControlIO(val params: BLEBasebandModemParams) extends Bundl
     val control = new DCOControlIO
     val useDCO = Bool()
   }
+  val debug = new Bundle {
+    val enabled = Bool()
+  }
 }
 
 class GFSKModemTuningIO extends Bundle {
@@ -107,7 +110,16 @@ class GFSKModemTuningIO extends Bundle {
     val t3 = UInt(6.W)
   }
   val enable = new Bundle {
-    val rx = UInt(5.W)
+    val rx = new Bundle {
+      val i = UInt(5.W)
+      val q = UInt(5.W)
+    }
+  }
+  val mux = new Bundle {
+    val dbg = new Bundle {
+      val in = UInt(10.W)
+      val out = UInt(10.W)
+    }
   }
 }
 
@@ -119,10 +131,10 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
     val tuning = new Bundle {
       val data = new Bundle {
         val i = new Bundle {
-          val vgaAtten = Output(UInt(5.W))
+          val vgaAtten = Output(UInt(10.W))
         }
         val q = new Bundle {
-          val vgaAtten = Output(UInt(5.W))
+          val vgaAtten = Output(UInt(10.W))
         }
       }
       val control = Input(new GFSKModemTuningControlIO(params))

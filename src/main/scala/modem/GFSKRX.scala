@@ -20,7 +20,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.in <> io.analog
 
   val cdr = Module(new CDRDecision(params))
-  cdr.io.signal.bits := imageRejection.io.out.data.bits(6,1)
+  cdr.io.signal.bits := imageRejection.io.out.data.bits(6,1).asSInt()
   cdr.io.signal.valid := imageRejection.io.out.data.valid
   imageRejection.io.out.data.ready := cdr.io.signal.ready
 

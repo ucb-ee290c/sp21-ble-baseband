@@ -233,6 +233,9 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
     }
     val analog = new Bundle {
       val pllD = Output(UInt(11.W))
+      val enable = new Bundle {
+        val rx = Output(UInt(5.W))
+      }
     }
   })
 
@@ -282,6 +285,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
 
   // Analog IO
   io.analog.pllD := 1200.U + constants.channelIndex + (state === s_tx).asUInt()
+  io.analog.enable.rx := Mux(state === s_rx | state === s_debug, (scala.math.pow(2, io.analog.enable.rx.getWidth) - 1).toInt.asUInt ,0.U)
 
   // Command wires
   io.cmd.ready := state === s_idle

@@ -1,7 +1,6 @@
 package modem
 
 import baseband.BLEBasebandModemParams
-import modem.HilbertFilter
 import breeze.linalg.DenseVector
 import chisel3.UInt
 import chisel3._

@@ -15,7 +15,7 @@ case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
   paddrBits: Int = 32,
   maxReadSize: Int = 258,
-  adcBits: Int = 5, // TODO this is only for testing should be 8
+  adcBits: Int = 8,
   adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
   modemQueueDepth: Int = 128,
@@ -68,7 +68,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val io: BLEBasebandModemFrontendBundle
 
   // Assertions for RegMap Parameter Correctness
-  assert(params.adcBits <= 8, s"ADC bits ${params.adcBits} are not less than or equal to 8")
+  assert(params.adcBits <= 8, s"ADC bits set to ${params.adcBits}, must than or equal to 8")
 
   // Instruction from processor
   val inst = Wire(new DecoupledIO(UInt(32.W)))
@@ -120,11 +120,11 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val mixer_r2 = RegInit(0.U(4.W))
   val mixer_r3 = RegInit(0.U(4.W))
 
-  val i_vgaAtten = RegInit(0.U(5.W))
+  val i_vgaAtten = RegInit(0.U(10.W))
   val i_vgaAtten_reset = RegInit(false.B)
   val i_vgaAtten_useAGC = RegInit(false.B)
   val i_vgaAtten_sampleWindow = RegInit(1.U(log2Ceil(params.agcMaxWindow).W))
-  val i_vgaAtten_idealPeakToPeak = RegInit(128.U(params.adcBits.W)) // TODO: Verify initial value
+  val i_vgaAtten_idealPeakToPeak = RegInit(math.pow(2, params.adcBits - 1).toInt.U(params.adcBits.W)) // TODO: Verify initial value
   val i_vgaAtten_gain = RegInit(32.U(8.W)) // TODO: Verify initial value
 
   val i_filter_r0 = RegInit(0.U(4.W))
@@ -138,7 +138,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val i_filter_r8 = RegInit(0.U(4.W))
   val i_filter_r9 = RegInit(0.U(4.W))
 
-  val q_vgaAtten = RegInit(0.U(5.W))
+  val q_vgaAtten = RegInit(0.U(10.W))
   val q_vgaAtten_reset = RegInit(false.B)
   val q_vgaAtten_useAGC = RegInit(false.B)
   val q_vgaAtten_sampleWindow = RegInit(1.U(log2Ceil(params.agcMaxWindow).W))
@@ -160,6 +160,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val dac_t1 = RegInit(0.U(6.W))
   val dac_t2 = RegInit(0.U(6.W))
   val dac_t3 = RegInit(0.U(6.W))
+
+  val enableDebug = RegInit(false.B)
+  val mux_dbg_in = RegInit(0.U(10.W))
+  val mux_dbg_out = RegInit(0.U(10.W))
+  val enable_rx_i = RegInit(0.U(5.W))
+  val enable_rx_q = RegInit(0.U(5.W))
 
   io.tuning.trim.g0 := trim_g0
   io.tuning.trim.g1 := trim_g1
@@ -216,6 +222,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.dac.t2 := dac_t2
   io.tuning.dac.t3 := dac_t3
 
+  io.tuningControl.debug.enabled := enableDebug
+  io.tuning.mux.dbg.in := mux_dbg_in
+  io.tuning.mux.dbg.out := mux_dbg_out
+  io.tuning.enable.rx.i := enable_rx_i
+  io.tuning.enable.rx.q := enable_rx_q
+
 
   interrupts(0) := io.back.interrupt
 
@@ -227,7 +239,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x10 -> Seq(RegField.r(32, status2)),
     0x14 -> Seq(RegField.r(32, status3)),
     0x18 -> Seq(RegField.r(32, status4)),
-    0x1C -> Seq(RegField(8, trim_g0)), // Tuning start
+    0x1C -> Seq(RegField(8, trim_g0)), // Tuning start, Trim
     0x1D -> Seq(RegField(8, trim_g1)),
     0x1E -> Seq(RegField(8, trim_g2)),
     0x1F -> Seq(RegField(8, trim_g3)),
@@ -235,59 +247,64 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x21 -> Seq(RegField(8, trim_g5)),
     0x22 -> Seq(RegField(8, trim_g6)),
     0x23 -> Seq(RegField(8, trim_g7)),
-    0x24 -> Seq(
+    0x24 -> Seq( // Mixer
       RegField(4, mixer_r0),
       RegField(4, mixer_r1)),
     0x25 -> Seq(
       RegField(4, mixer_r2),
       RegField(4, mixer_r3)),
-    0x26 -> Seq(RegField(5, i_vgaAtten)),
-    0x27 -> Seq(RegField(1, i_vgaAtten_reset)),
-    0x28 -> Seq(RegField(1, i_vgaAtten_useAGC)),
-    0x29 -> Seq(RegField(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
-    0x2A -> Seq(RegField(params.adcBits, i_vgaAtten_idealPeakToPeak)),
-    0x2B -> Seq(RegField(8, i_vgaAtten_gain)),
-    0x2C -> Seq(
+    0x26 -> Seq(RegField(10, i_vgaAtten)), // I VGA
+    0x28 -> Seq(RegField(1, i_vgaAtten_reset)),
+    0x29 -> Seq(RegField(1, i_vgaAtten_useAGC)),
+    0x2A -> Seq(RegField(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
+    0x2B -> Seq(RegField(params.adcBits, i_vgaAtten_idealPeakToPeak)),
+    0x2C -> Seq(RegField(8, i_vgaAtten_gain)),
+    0x2D -> Seq( // I Filter
       RegField(4, i_filter_r0),
       RegField(4, i_filter_r1)),
-    0x2D -> Seq(
+    0x2E -> Seq(
       RegField(4, i_filter_r2),
       RegField(4, i_filter_r3)),
-    0x2E -> Seq(
+    0x2F -> Seq(
       RegField(4, i_filter_r4),
       RegField(4, i_filter_r5)),
-    0x2F -> Seq(
+    0x30 -> Seq(
       RegField(4, i_filter_r6),
       RegField(4, i_filter_r7)),
-    0x30 -> Seq(
+    0x31 -> Seq(
       RegField(4, i_filter_r8),
       RegField(4, i_filter_r9)),
-    0x31 -> Seq(RegField(5, q_vgaAtten)),
-    0x32 -> Seq(RegField(1, q_vgaAtten_reset)),
-    0x33 -> Seq(RegField(1, q_vgaAtten_useAGC)),
-    0x34 -> Seq(RegField(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
-    0x35 -> Seq(RegField(params.adcBits, q_vgaAtten_idealPeakToPeak)),
-    0x36 -> Seq(RegField(8, q_vgaAtten_gain)),
-    0x37 -> Seq(
+    0x32 -> Seq(RegField(10, q_vgaAtten)), // Q VGA
+    0x34 -> Seq(RegField(1, q_vgaAtten_reset)),
+    0x35 -> Seq(RegField(1, q_vgaAtten_useAGC)),
+    0x36 -> Seq(RegField(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
+    0x37 -> Seq(RegField(params.adcBits, q_vgaAtten_idealPeakToPeak)),
+    0x38 -> Seq(RegField(8, q_vgaAtten_gain)),
+    0x39 -> Seq( // Q Filter
       RegField(4, q_filter_r0),
       RegField(4, q_filter_r1)),
-    0x38 -> Seq(
+    0x3A -> Seq(
       RegField(4, q_filter_r2),
       RegField(4, q_filter_r3)),
-    0x39 -> Seq(
+    0x3B -> Seq(
       RegField(4, q_filter_r4),
       RegField(4, q_filter_r5)),
-    0x3A -> Seq(
+    0x3C -> Seq(
       RegField(4, q_filter_r6),
       RegField(4, q_filter_r7)),
-    0x3B -> Seq(
+    0x3D -> Seq(
       RegField(4, q_filter_r8),
       RegField(4, q_filter_r9)),
-    0x3C -> Seq(RegField(6, dac_t0)),
-    0x3D -> Seq(RegField(6, dac_t1)),
-    0x3E -> Seq(RegField(6, dac_t2)),
-    0x3F -> Seq(RegField(6, dac_t3)),
-    0x40 -> Seq(RegField.w(32, lutCmd))
+    0x3E -> Seq(RegField(6, dac_t0)), // DAC
+    0x3F -> Seq(RegField(6, dac_t1)),
+    0x40 -> Seq(RegField(6, dac_t2)),
+    0x41 -> Seq(RegField(6, dac_t3)),
+    0x42 -> Seq(RegField(1, enableDebug)), // Debug Configuration
+    0x43 -> Seq(RegField(10, mux_dbg_in)),
+    0x45 -> Seq(RegField(10, mux_dbg_out)),
+    0x47 -> Seq(RegField(5, enable_rx_i)), // Manual enable values
+    0x48 -> Seq(RegField(5, enable_rx_q)),
+    0x49 -> Seq(RegField.w(32, lutCmd)) // LUT Programming
   )
 }
 
@@ -349,7 +366,8 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   io.tuning.q.filter := basebandFrontend.io.tuning.q.filter
   io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.AGC.useAGC, modem.io.tuning.data.i.vgaAtten, basebandFrontend.io.tuning.i.vgaAtten)
   io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.AGC.useAGC, modem.io.tuning.data.q.vgaAtten, basebandFrontend.io.tuning.q.vgaAtten)
-
+  io.tuning.enable.rx.i := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.i, controller.io.analog.enable.rx)
+  io.tuning.enable.rx.q := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.q, controller.io.analog.enable.rx)
 
   io.data.pllD := controller.io.analog.pllD
   io.data.loCT := modem.io.analog.loCT
