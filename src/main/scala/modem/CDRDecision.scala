@@ -39,7 +39,9 @@ class CDRDecision(params: BLEBasebandModemParams) extends Module {
   envelopeDetectorF0.io.out.ready := io.out.ready
   envelopeDetectorF1.io.out.ready := io.out.ready
 
-  def risingedge(x: Bool) = x && !RegNext(x)
+
+  def detectEdge(x: Bool) = x =/= RegNext(x)
+
   val guess = Wire(Bool())
   val cdr = Module(new CDR)
   val beginSampling = Wire(Bool())
@@ -47,7 +49,7 @@ class CDRDecision(params: BLEBasebandModemParams) extends Module {
   val accumulator = Wire(SInt(8.W))
   accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(8.W))
   cdr.io.d := guess
-  beginSampling := risingedge(cdr.io.clk)
+  beginSampling := detectEdge(ShiftRegister(cdr.io.clk, 10))
   io.out.valid := beginSampling
   io.out.bits := Mux(accumulator > 0.S, 1.U, 0.U)
 }

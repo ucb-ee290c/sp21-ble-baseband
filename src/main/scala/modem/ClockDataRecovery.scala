@@ -48,14 +48,16 @@ class CDRDCO extends Module {
   when (risingedge(io.in.dec)) {
     willDec := 1.B
   }.elsewhen(toggleFF) {
-    willInc := 0.B
+    willDec := 0.B
   }
 
-  io.out.clk := RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 5)._2))
+  io.out.clk := !toggleFF & !clock.asBool()
+    //RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 5)._2))
 
 }
 
 class CDR extends Module {
+  def risingedge(x: Bool) = x && !RegNext(x)
   val io =  IO(new Bundle() {
     val d = Input(Bool())
     val clk = Output(Bool())
@@ -64,10 +66,10 @@ class CDR extends Module {
   val kCounter = Module(new KCounter).io
   val dco = Module(new CDRDCO).io
 
-  kCounter.in.phaseError := io.d ^ dco.out.clk
+  kCounter.in.phaseError := io.d ^ io.clk
   dco.in.inc := kCounter.out.carry
   dco.in.dec := kCounter.out.borrow
 
-  io.clk := dco.out.clk
+  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 10)._2))
 
 }
