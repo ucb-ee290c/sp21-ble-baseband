@@ -12,7 +12,6 @@ class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
   val crcSeed = UInt(24.W)
   val accessAddress = UInt(32.W)
-  val imageRejecionOp = Bool()
 }
 
 class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {

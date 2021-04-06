@@ -232,6 +232,10 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
       val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
     }
     val analog = new Bundle {
+      val offChipMode = new Bundle {
+        val rx = Output(Bool())
+        val tx = Output(Bool())
+      }
       val pllD = Output(UInt(11.W))
       val enable = new Bundle {
         val rx = Output(UInt(5.W))
@@ -285,7 +289,9 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
 
   // Analog IO
   io.analog.pllD := 1200.U + constants.channelIndex + (state === s_tx).asUInt()
-  io.analog.enable.rx := Mux(state === s_rx | state === s_debug, (scala.math.pow(2, io.analog.enable.rx.getWidth) - 1).toInt.asUInt ,0.U)
+  io.analog.enable.rx := Mux(state === s_rx | state === s_debug, (scala.math.pow(2, io.analog.enable.rx.getWidth) - 1).toInt.asUInt, 0.U)
+  io.analog.offChipMode.rx := state === s_rx
+  io.analog.offChipMode.tx := state === s_tx
 
   // Command wires
   io.cmd.ready := state === s_idle
@@ -305,10 +311,6 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
               is (BasebandISA.CONFIG_CHANNEL_INDEX) {
                 constants.channelIndex := io.cmd.bits.additionalData(5, 0)
               }
-              is (BasebandISA.CONFIG_IMAGE_REJECTION_OP) {
-                constants.imageRejecionOp := io.cmd.bits.additionalData(0).asBool()
-              }
-
             }
           }
           is (BasebandISA.SEND_CMD) {

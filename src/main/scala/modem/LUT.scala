@@ -8,6 +8,8 @@ object GFSKModemLUTCodes {
   val LOCT = 1.U
   val AGCI = 2.U
   val AGCQ = 3.U
+  val DCOIFRONT = 4.U
+  val DCOQFRONT = 5.U
 }
 
 class GFSKModemLUTs extends Bundle {
@@ -15,6 +17,8 @@ class GFSKModemLUTs extends Bundle {
   val LOCT = Vec(64, UInt(8.W))
   val AGCI = Vec(64, UInt(10.W))
   val AGCQ = Vec(64, UInt(10.W))
+  val DCOIFRONT = Vec(64, UInt(6.W))
+  val DCOQFRONT = Vec(64, UInt(6.W))
 }
 
 class GFSKModemLUTCommand extends Bundle {
