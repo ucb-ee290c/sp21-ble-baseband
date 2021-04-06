@@ -14,12 +14,12 @@ class GFSKTX extends Module {
     }
   })
 
-  val cyclesPerSymbol = 20 // TODO: Regmap this (processor speed in MHz, must be multiple of 10)
+  val cyclesPerSymbol = 20
   val cyclesPerSample = cyclesPerSymbol / 10 // Oversampling must be 10
 
   val gaussianFixedPointWeights = Seq(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.015625, 0.0625, 0.15625, 0.328125, 0.59375,
     0.9375, 1.265625, 1.484375, 1.484375, 1.265625, 0.9375, 0.59375, 0.328125, 0.15625, 0.0625, 0.015625)
-    .map(w => FixedPoint.fromDouble(w, 8.W, 6.BP)) //removed last 0 coeffs: 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    .map(w => FixedPoint.fromDouble(w, 8.W, 6.BP)) //removed last 7 coeffs: 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
   val counter = RegInit(0.U(8.W))
 
