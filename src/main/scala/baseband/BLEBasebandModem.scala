@@ -304,7 +304,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x45 -> Seq(RegField(10, mux_dbg_out)),
     0x47 -> Seq(RegField(5, enable_rx_i)), // Manual enable values
     0x48 -> Seq(RegField(5, enable_rx_q)),
-    0x49 -> Seq(RegField.w(32, lutCmd)) // LUT Programming
+    0x4C -> Seq(RegField.w(32, lutCmd)) // LUT Programming
   )
 }
 
