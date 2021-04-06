@@ -3,7 +3,7 @@ package modem
 import chisel3._
 import chisel3.util._
 
-class PacketDetector extends Module {
+class PreambleDetector extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(1.W))
     val firstBit = Input(UInt(1.W))
