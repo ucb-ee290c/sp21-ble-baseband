@@ -14,6 +14,14 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
     val digital = new Bundle {
       val out = Decoupled(UInt(1.W))
     }
+    val control = new Bundle {
+      val in = new Bundle {
+        val imageRejectionOp = Input(Bool())
+      }
+      val out = new Bundle {
+        val preambleDetected = Output(Bool())
+      }
+    }
   })
 
   val imageRejection = Module (new HilbertFilter(params))
@@ -25,4 +33,5 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.out.data.ready := cdr.io.signal.ready
 
   io.digital.out <> cdr.io.out
+  io.control.out.preambleDetected := false.B //TODO
 }

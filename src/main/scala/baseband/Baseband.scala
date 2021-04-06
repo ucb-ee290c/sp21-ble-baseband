@@ -27,6 +27,7 @@ class AssemblerControlIO extends Bundle {
 class DisassemblerControlIO extends Bundle {
   val in = Flipped(Decoupled(new PDAControlInputBundle))
   val out = Output(new PDAControlOutputBundle)
+  val preambleDetected = Input(Bool())
 }
 
 class BasebandControlIO(val addrBits: Int) extends Bundle {
@@ -106,6 +107,7 @@ class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
 
   disassembler.io.constants := io.constants
   disassembler.io.in.control <> io.control.disassembler.in
+  disassembler.io.in.preambleDetected := io.control.disassembler.preambleDetected
 
   io.control.disassembler.out <> disassembler.io.out.control
 

@@ -1,13 +1,10 @@
 package modem
 
 
-import baseband.{BLEBasebandModemParams, PDAControlInputBundle}
+import baseband.{BLEBasebandModemParams}
 import chisel3._
 import chisel3.experimental.FixedPoint
 import chisel3.util._
-import firrtl.ir.Width
-import freechips.rocketchip.config.Parameters
-//import chipyard.example.GenericFIR
 
 class HilbertFilterControlInput extends Bundle {
   val combineOperation = UInt(1.W)

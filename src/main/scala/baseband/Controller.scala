@@ -114,7 +114,7 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 }
 
 class RXChainControllerCommand(val addrBits: Int) extends Bundle {
-  val command = UInt(1.W)
+  val command = UInt(2.W)
   val addr = UInt(addrBits.W)
 }
 
@@ -154,6 +154,7 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
   io.disassemblerControl.in.valid := disassemblerReqValid
   io.disassemblerControl.in.bits.command := cmd.command
   io.disassemblerControl.in.bits.aa := io.constants.accessAddress
+  io.disassemblerControl.preambleDetected := DontCare
 
   switch(state) {
     is(s_idle) {

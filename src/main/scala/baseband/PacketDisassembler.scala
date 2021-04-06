@@ -8,15 +8,17 @@ import chisel3.util._
 
 object PDAControlInputCommands {
   val START_CMD = 0.U
-  val EXIT_CMD = 1.U
+  val DEBUG_CMD = 1.U
+  val EXIT_CMD = 2.U
 }
 class PDAControlInputBundle extends Bundle {
-  val command = UInt(1.W)
+  val command = UInt(2.W)
   val aa = UInt(32.W)
 }
 
 class PDAInputIO extends Bundle {
   val control = Flipped(Decoupled(new PDAControlInputBundle))
+  val preambleDetected = Input(Bool())
   val data = Flipped(Decoupled(UInt(1.W)))
 }
 
@@ -68,7 +70,7 @@ class PacketDisassembler extends Module {
 
   val io = IO(new PacketDisassemblerIO)
 
-  val s_idle :: s_preamble :: s_aa :: s_pdu_header :: s_pdu_payload :: s_crc :: Nil = Enum(6)
+  val s_idle :: s_preamble :: s_preamble_debug :: s_aa :: s_pdu_header :: s_pdu_payload :: s_crc :: Nil = Enum(7)
   val state = RegInit(s_idle)
 
   val aa = Reg(UInt(32.W))
@@ -115,8 +117,6 @@ class PacketDisassembler extends Module {
   //output function
   io.out.data.bits := data.asUInt
 
-  //done := state === s_crc && counter === 2.U && counter_byte === 7.U && in_fire
-
   io.out.control.length := length
   io.out.control.flag_aa := flag_aa
   io.out.control.flag_crc := flag_crc
@@ -143,40 +143,61 @@ class PacketDisassembler extends Module {
     flag_crc := false.B
     done := false.B
 
-    when (io.in.control.fire() & io.in.control.bits.command === PDAControlInputCommands.START_CMD) {
-      state := s_preamble
+    when (io.in.control.fire()) {
       aa := io.in.control.bits.aa
       counter := 0.U
       counter_byte := 0.U
+      when (io.in.control.bits.command === PDAControlInputCommands.START_CMD) {
+        state := s_preamble
+      }.elsewhen(io.in.control.bits.command === PDAControlInputCommands.DEBUG_CMD) {
+        state := s_preamble_debug
+      }
     }
-  }.elsewhen (state === s_preamble) {
+  }.elsewhen(state === s_preamble){
+    when (io.in.preambleDetected) {
+      control_ready := false.B
+      busy := true.B
+      state := s_aa
+      counter := 0.U
+      counter_byte := 0.U
+      data := 0.U(8.W).asBools()
+    }.elsewhen(io.in.control.fire() & io.in.control.bits.command === PDAControlInputCommands.EXIT_CMD) { // Support pre-match exit
+      in_ready := false.B
+      out_valid := false.B
+      data := 0.U(8.W).asBools()
+
+      length := 0.U
+      flag_aa := false.B
+      flag_crc := false.B
+    }
+  }.elsewhen (state === s_preamble_debug) {
     in_ready := true.B
     out_valid := false.B
 
     when (in_fire) {
       data(7) := io.in.data.bits.asBool()
-      for(i <- 0 to 6) {//value shifting
-        data(i) := data(i+1)
+      for (i <- 0 to 6) { //value shifting
+        data(i) := data(i + 1)
       }
+    }
 
-      // If we match on this cycle (pre-shift) the next bit will be AA but received in state preamble
-      // This is why we try to match on a lookahead of the future data value
-      when (Cat(io.in.data.bits, data.asUInt().apply(7,1)) === preamble) {
-        control_ready := false.B
-        busy := true.B
-        state := s_aa
-        counter := 0.U
-        counter_byte := 0.U
-        data := 0.U(8.W).asBools()
-      }.elsewhen(io.in.control.fire() & io.in.control.bits.command === PDAControlInputCommands.EXIT_CMD) { // Support pre-match exit
-        in_ready := false.B
-        out_valid := false.B
-        data := 0.U(8.W).asBools()
+    // If we match on this cycle (pre-shift) the next bit will be AA but received in state preamble
+    // This is why we try to match on a lookahead of the future data value
+    when (Cat(io.in.data.bits, data.asUInt().apply(7,1)) === preamble) {
+      control_ready := false.B
+      busy := true.B
+      state := s_aa
+      counter := 0.U
+      counter_byte := 0.U
+      data := 0.U(8.W).asBools()
+    }.elsewhen(io.in.control.fire() & io.in.control.bits.command === PDAControlInputCommands.EXIT_CMD) { // Support pre-match exit
+      in_ready := false.B
+      out_valid := false.B
+      data := 0.U(8.W).asBools()
 
-        length := 0.U
-        flag_aa := false.B
-        flag_crc := false.B
-      }
+      length := 0.U
+      flag_aa := false.B
+      flag_crc := false.B
     }
   }.elsewhen (state === s_aa) {
     val (stateOut, counterOut, counterByteOut) = stateUpdate(s_aa, s_pdu_header, 4.U, counter, counter_byte, in_fire)
