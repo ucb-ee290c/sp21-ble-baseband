@@ -5,6 +5,19 @@ import chisel3.util._
 import chisel3.experimental.{DataMirror, FixedPoint}
 import baseband.BLEBasebandModemParams
 
+class GFSKRXControlInputBundle extends Bundle {
+  val imageRejectionOp = Bool()
+}
+
+class GFSKRXControlOutputBundle extends Bundle {
+  val preambleDetected = Bool()
+}
+
+class GFSKRXControlIO extends Bundle {
+  val in = Input(new GFSKRXControlInputBundle)
+  val out = Output(new GFSKRXControlOutputBundle)
+}
+
 class GFSKRX(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
     val analog = new Bundle {
@@ -14,14 +27,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
     val digital = new Bundle {
       val out = Decoupled(UInt(1.W))
     }
-    val control = new Bundle {
-      val in = new Bundle {
-        val imageRejectionOp = Input(Bool())
-      }
-      val out = new Bundle {
-        val preambleDetected = Output(Bool())
-      }
-    }
+    val control = new GFSKRXControlIO
   })
 
   val imageRejection = Module (new HilbertFilter(params))

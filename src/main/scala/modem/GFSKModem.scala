@@ -128,13 +128,9 @@ class GFSKModemTuningIO extends Bundle {
   }
 }
 
-class GFSKModemControlIO() extends Bundle {
-  val in = new Bundle {
-
-  }
-  val out = new Bundle {
-    val preambleDetected = Output(Bool())
-  }
+class GFSKModemControlIO(val params: BLEBasebandModemParams) extends Bundle {
+  val tx = new GFSKTXControlIO(params)
+  val rx = new GFSKRXControlIO()
 }
 
 class GFSKModem(params: BLEBasebandModemParams) extends Module {
@@ -142,7 +138,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
     val analog = new GFSKModemAnalogIO(params)
     val digital = new GFSKModemDigitalIO
     val constants = Input(new BasebandConstants)
-    val control = new GFSKModemControlIO()
+    val control = new GFSKModemControlIO(params)
     val lutCmd = Flipped(Decoupled(new GFSKModemLUTCommand))
     val tuning = new Bundle {
       val data = new Bundle {
@@ -193,11 +189,12 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
     }
   }
 
-  val tx = Module(new GFSKTX())
+  val tx = Module(new GFSKTX(params))
+  tx.io.control <> io.control.tx
 
   val rx = Module(new GFSKRX(params))
   rx.io.control.in.imageRejectionOp := io.tuning.control.imageRejectionOp
-  io.control.out.preambleDetected := rx.io.control.out.preambleDetected
+  io.control.rx.out.preambleDetected := rx.io.control.out.preambleDetected
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
