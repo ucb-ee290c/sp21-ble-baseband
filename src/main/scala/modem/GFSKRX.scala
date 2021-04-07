@@ -6,6 +6,7 @@ import chisel3.experimental.{DataMirror, FixedPoint}
 import baseband.BLEBasebandModemParams
 
 class GFSKRXControlInputBundle extends Bundle {
+  val enable = Bool()
   val imageRejectionOp = Bool()
 }
 
@@ -45,7 +46,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   val cdr = Module(new CDR)
   val beginSampling = Wire(Bool())
   guess := demod.io.guess.bits
-  demod.io.guess.ready := 1.B
+  demod.io.guess.ready := io.control.in.enable
 
   val accumulator = Wire(SInt(8.W)) // TODO: THIS WIDTH IS VERY IMPORTANT, THIS VALUE CANNOT OVERFLOW
   accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(8.W))
