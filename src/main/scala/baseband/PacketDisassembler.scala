@@ -143,15 +143,12 @@ class PacketDisassembler extends Module {
     flag_crc := false.B
     done := false.B
 
-    when (io.in.control.fire()) {
+    when (io.in.control.fire() && (io.in.control.bits.command === PDAControlInputCommands.START_CMD ||
+      io.in.control.bits.command === PDAControlInputCommands.DEBUG_CMD)) {
       aa := io.in.control.bits.aa
       counter := 0.U
       counter_byte := 0.U
-      when (io.in.control.bits.command === PDAControlInputCommands.START_CMD) {
-        state := s_preamble
-      }.elsewhen(io.in.control.bits.command === PDAControlInputCommands.DEBUG_CMD) {
-        state := s_preamble_debug
-      }
+      state := Mux(io.in.control.bits.command === PDAControlInputCommands.START_CMD, s_preamble, s_preamble_debug)
     }
   }.elsewhen(state === s_preamble){
     when (io.in.preambleDetected) {

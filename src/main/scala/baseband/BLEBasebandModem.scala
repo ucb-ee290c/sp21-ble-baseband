@@ -381,13 +381,15 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
 
   val modem = Module(new GFSKModem(params))
   modem.io.lutCmd <> basebandFrontend.io.back.lutCmd
-  modem.io.constants := controller.io.constants
-  baseband.io.control.disassembler.preambleDetected := modem.io.control.out.preambleDetected
-  modem.io.digital.tx <> baseband.io.modem.tx
-  modem.io.digital.rx <> baseband.io.modem.rx
   modem.io.analog.rx <> io.data.rx
+  modem.io.constants := controller.io.constants
+  modem.io.control <> controller.io.modemControl
+  modem.io.digital.tx <> baseband.io.modem.digital.tx
+  modem.io.digital.rx <> baseband.io.modem.digital.rx
   modem.io.tuning.control := basebandFrontend.io.tuningControl
   modem.io.analog.tx.pllReady := io.data.tx.pllReady
+
+  baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim
