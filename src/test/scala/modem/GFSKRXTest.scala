@@ -28,13 +28,14 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
     }
   })
   val gfskRX = Module(new GFSKRX(params)).io
-  gfskRX.control.in.imageRejectionOp := 0.B
 
   val preambleDetected = RegInit(0.B)
   def risingedge(x: Bool) = x && !RegNext(x)
   when (risingedge(gfskRX.control.out.preambleDetected)) {
     preambleDetected := 1.B
   }
+
+  gfskRX.control.in.imageRejectionOp := 0.B
 
   gfskRX.analog <> io.analog
   io.digital.out.bits := gfskRX.digital.out.bits
@@ -65,6 +66,21 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     filterForward(b, a, signal)
   }
 
+  var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
+  def whiten(b: Int): Int = {
+    val last = lfsr.last
+    lfsr = lfsr.indices.map { i =>
+
+      if (i == 0) {
+        lfsr.last
+      } else if (i == 4) {
+        lfsr.last ^ lfsr(3)
+      } else {
+        lfsr(i - 1)
+      }
+    }
+    last ^ b
+  }
 
   val gaussian_weights = Seq(1.66272941385205e-08, 1.31062698399579e-07, 8.95979722260093e-07, 5.31225368476001e-06, 2.73162439119005e-05, 0.000121821714511972, 0.000471183401324158, 0.00158058118651170, 0.00459838345240388, 0.0116025943557647, 0.0253902270288187, 0.0481880785252652, 0.0793184437320263, 0.113232294984428, 0.140193534368681, 0.150538370165906, 0.140193534368681, 0.113232294984428, 0.0793184437320263, 0.0481880785252652, 0.0253902270288187, 0.0116025943557647, 0.00459838345240388, 0.00158058118651170, 0.000471183401324158, 0.000121821714511972, 2.73162439119005e-05, 5.31225368476001e-06, 8.95979722260093e-07, 1.31062698399579e-07, 1.66272941385205e-08)
   def bitstream(in: Seq[Int]): Seq[Double] = {
@@ -109,13 +125,14 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val numberOfBits = 100
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
-      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet ++ Seq(0,0,0,0,0,0,0)
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
       val input = testWaveform(bits)
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(bits.size * 20)
       println(outMonitor.monitoredTransactions.map{_.data.litValue})
-      assert(packet.zip(outMonitor.monitoredTransactions.map{_.data.litValue}).forall {p => p._1 == p._2})
+      lfsr = Seq(1,0,0,0,0,0,0)
+      assert(packet.zip(outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}).forall {p => p._1 == p._2})
     }
   }
   it should "PASS Radio Frequency" in {
