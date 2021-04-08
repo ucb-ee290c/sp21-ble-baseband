@@ -50,8 +50,8 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   val accumulator = Wire(SInt(8.W)) // TODO: THIS WIDTH IS VERY IMPORTANT, THIS VALUE CANNOT OVERFLOW
   accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(8.W))
-  cdr.io.d := guess
-  beginSampling := detectEdge(ShiftRegister(cdr.io.clk, 10))
+  cdr.io.d :=  guess
+  beginSampling := risingedge(cdr.io.clk)//risingedge(ShiftRegister(cdr.io.clk, 5))
   io.digital.out.valid := beginSampling
   io.digital.out.bits := Mux(accumulator > 0.S, 1.U, 0.U)
 

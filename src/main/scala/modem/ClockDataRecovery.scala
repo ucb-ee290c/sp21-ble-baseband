@@ -16,8 +16,8 @@ class KCounter extends Module {
   })
   val up = !io.in.phaseError
   val down = io.in.phaseError
-  io.out.carry := Counter(up, 10)._2 // Up Counter
-  io.out.borrow := Counter(down, 10)._2 // Down Counter
+  io.out.carry := Counter(up, 5)._2 // Up Counter
+  io.out.borrow := Counter(down, 5)._2 // Down Counter
 }
 
 class CDRDCO extends Module {
@@ -70,6 +70,6 @@ class CDR extends Module {
   dco.in.inc := kCounter.out.carry
   dco.in.dec := kCounter.out.borrow
 
-  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 10)._2))
+  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 5)._2))
 
 }
