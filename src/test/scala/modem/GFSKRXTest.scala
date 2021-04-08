@@ -13,49 +13,36 @@ import baseband.BLEBasebandModemParams
 import chisel3.experimental.FixedPoint
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
-import verif._
 import scala.collection.mutable.ListBuffer
-/*
+import scala.util.Random
+import verif._
+
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
-  var io = IO(new Bundle {
-    val in = Input(new Bundle() {
-      val i = UInt(5.W)
-      val q = UInt(5.W)
-    })
-    val out = Output(new Bundle {
-      val f0 = SInt(8.W)
-      val f1 = SInt(8.W)
-    })
+  val io = IO(new Bundle {
+    val analog = new Bundle {
+      val i = Flipped(Decoupled(UInt(params.adcBits.W)))
+      val q = Flipped(Decoupled(UInt(params.adcBits.W)))
+    }
+    val digital = new Bundle {
+      val out = Decoupled(UInt(1.W))
+    }
   })
+  val gfskRX = Module(new GFSKRX(params)).io
 
-  val hilbertFilter = Module(new HilbertFilter(params))
-  hilbertFilter.io.in.i.data := io.in.i
-  hilbertFilter.io.in.i.valid := 1.B
-  hilbertFilter.io.in.q.data := io.in.i
-  hilbertFilter.io.in.q.valid := 1.B
+  val preambleDetected = RegInit(0.B)
+  def risingedge(x: Bool) = x && !RegNext(x)
+  when (risingedge(gfskRX.control.out.preambleDetected)) {
+    preambleDetected := 1.B
+  }
 
-  val bandpassF0 = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(19.W, 11.BP),
-    FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
+  gfskRX.control.in.imageRejectionOp := 0.B
 
-  val bandpassF1 = Module( new GenericFIR(FixedPoint(6.W, 0.BP), FixedPoint(19.W, 11.BP),
-    FIRCoefficients.GFSKRX_Bandpass_F1.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
-
-  bandpassF0.io.in.bits.data := hilbertFilter.io.out.data.bits(6, 1).asFixedPoint(0.BP)
-  hilbertFilter.io.out.data.ready := bandpassF0.io.in.ready
-  bandpassF0.io.in.valid := hilbertFilter.io.out.data.valid
-
-  bandpassF1.io.in.bits.data := hilbertFilter.io.out.data.bits(6, 1).asFixedPoint(0.BP)
-  hilbertFilter.io.out.data.ready := bandpassF1.io.in.ready
-  bandpassF1.io.in.valid := hilbertFilter.io.out.data.valid
-
-  bandpassF0.io.out.ready := 1.B
-  io.out.f0 := bandpassF0.io.out.bits.data(18, 11).asSInt
-
-  bandpassF1.io.out.ready := 1.B
-  io.out.f1 := bandpassF1.io.out.bits.data(18, 11).asSInt
-
+  gfskRX.analog <> io.analog
+  io.digital.out.bits := gfskRX.digital.out.bits
+  io.digital.out.valid := preambleDetected & gfskRX.digital.out.valid
+  gfskRX.digital.out.ready := io.digital.out.ready
 }
-*/
+
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   val MHz = 1000000
@@ -79,28 +66,43 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     filterForward(b, a, signal)
   }
 
+  var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
+  def whiten(b: Int): Int = {
+    val last = lfsr.last
+    lfsr = lfsr.indices.map { i =>
 
-  val gaussian_weights = Seq(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.015625, 0.0625, 0.15625, 0.328125, 0.59375,0.9375, 1.265625, 1.484375, 1.484375, 1.265625, 0.9375, 0.59375, 0.328125, 0.15625, 0.0625, 0.015625, 0.0, 0.0,0.0, 0.0, 0.0, 0.0, 0.0)
+      if (i == 0) {
+        lfsr.last
+      } else if (i == 4) {
+        lfsr.last ^ lfsr(3)
+      } else {
+        lfsr(i - 1)
+      }
+    }
+    last ^ b
+  }
+
+  val gaussian_weights = Seq(1.66272941385205e-08, 1.31062698399579e-07, 8.95979722260093e-07, 5.31225368476001e-06, 2.73162439119005e-05, 0.000121821714511972, 0.000471183401324158, 0.00158058118651170, 0.00459838345240388, 0.0116025943557647, 0.0253902270288187, 0.0481880785252652, 0.0793184437320263, 0.113232294984428, 0.140193534368681, 0.150538370165906, 0.140193534368681, 0.113232294984428, 0.0793184437320263, 0.0481880785252652, 0.0253902270288187, 0.0116025943557647, 0.00459838345240388, 0.00158058118651170, 0.000471183401324158, 0.000121821714511972, 2.73162439119005e-05, 5.31225368476001e-06, 8.95979722260093e-07, 1.31062698399579e-07, 1.66272941385205e-08)
   def bitstream(in: Seq[Int]): Seq[Double] = {
-    in.flatMap{b: Int => Seq.tabulate(20){i: Int => (if (b == 0) -1.0 else 1.0)}}
+    in.flatMap{b: Int => Seq.tabulate(10){i: Int => (if (b == 0) -1.0 else 1.0)}}
   }
 
   def FIR(in: Seq[Double], coeff: Seq[Double]): Seq[Double] = {
     var samples = ListBuffer[Double]()
     return in.map { s: Double =>
       samples.prepend(s)
-      samples.zip(coeff).map {g: (Double, Double) => g._1 * g._2}.sum / 10
+      samples.zip(coeff).map {g: (Double, Double) => g._1 * g._2}.sum
     }
   }
 
   def RFtoIF(in: Seq[Double], Fc: Double): Seq[(Double, Double)] = {
-    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length)).toInt)(_ * (1/(analog_F_sample)))
-
-    val rf = {t:Double => 
-	math.cos(2 * math.Pi * (Fc + (if (in((t / (symbol_time)).floor.toInt) == 1) 1 else -1) * 0.25 * MHz) * t)}
-    val I = {t:Double => rf(t) * math.cos(2 * math.Pi * F_LO * t)}
-    val Q = {t:Double => rf(t) * math.sin(2 * math.Pi * F_LO * t)}
-    return analogLowpass(timeSteps.map{I}, analog_F_sample, 10 * MHz) zip analogLowpass(timeSteps.map{Q}, analog_F_sample, 10 * MHz)
+    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length / 10)).toInt)(_ * (1/(analog_F_sample)))
+    val frequencies = timeSteps.map {t => Fc + in((t / (symbol_time / 10)).floor.toInt) * 0.25 * MHz }
+    val phases = frequencies.map{var s: Double = 0.0; d => {s += d; 2 * math.Pi * s * (1/analog_F_sample)}}
+    val rf = phases.map {math.cos(_)}
+    val I = timeSteps.indices.map {i => rf(i) * math.cos(2 * math.Pi * F_LO * timeSteps(i))}
+    val Q = timeSteps.indices.map {i => rf(i) * math.sin(2 * math.Pi * F_LO * timeSteps(i))}
+    return analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz)
   }
   def analogToDigital(in: (Seq[(Double, Double)])): (Seq[(Int, Int)]) = {
     val sampled = in.zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e}
@@ -111,34 +113,36 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     return sampled.map{s: (Double, Double) => (((s._1 - minI) / (maxI - minI) * 31).toInt, ((s._2 - minQ) / (maxQ - minQ) * 31).toInt)}
   }
 
-  it should "Elaborate a modem" in {
-    test(new GFSKRX(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+  def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
+    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+  }
+  it should "PASS Fuzz" in {
+    test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val input = analogToDigital(RFtoIF(Seq(1,0,1,0,1,0,1,0,1,0), F_RF))
+      val numberOfBits = 250
+      val preamble = Seq(1,0,1,0,1,0,1,0)
+      val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
+      val input = testWaveform(bits)
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
-      c.clock.step(1000)
-      println(outMonitor.monitoredTransactions.map{_.data})
-      println(input)
+      c.clock.step(bits.size * 20)
+
+      lfsr = Seq(1,0,0,0,0,0,0)
+      val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}
+      println(retrieved)
+      assert(packet.zip(retrieved).forall {p => p._1 == p._2})
     }
   }
-
-  it should "gaussian FIR" in {
-    test(new GFSKRX(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      println(bitstream(Seq(1,0,1,0,1,0,1,0,1,0)))
-      println(FIR(bitstream(Seq(1,0,1,0,1,0,1,0,1,0)), gaussian_weights))
-    }
-  }
-
   it should "PASS Radio Frequency" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.out.data.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
-      val input = analogToDigital(RFtoIF(Seq(1,0,1,0,1,0,1,0,1,0), F_RF))
+      val input = testWaveform(Seq(0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0))
       while (i < input.length) {
         c.io.in.i.bits.poke(input(i)._1.asUInt())
         c.io.in.q.bits.poke(input(i)._2.asUInt())
@@ -160,7 +164,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.out.data.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
-      val input = analogToDigital(RFtoIF(FIR(bitstream(Seq(1,0,1,0,1,0,1,0,1,0)), gaussian_weights), F_IM))
+      val input = testWaveform(Seq(0,0,0,1,1,1,0,0,0,1,1,1,0,0,0), F_IM)
       while (i < input.length) {
         c.io.in.i.bits.poke(input(i)._1.asUInt())
         c.io.in.q.bits.poke(input(i)._2.asUInt())

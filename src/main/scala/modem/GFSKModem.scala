@@ -40,17 +40,22 @@ class GFSKModemTuningControlIO(val params: BLEBasebandModemParams) extends Bundl
       val control = new AGCControlIO(params)
       val useAGC = Bool()
     }
+    val DCO = new Bundle {
+      val control = new DCOControlIO
+      val useDCO = Bool()
+    }
   }
   val q = new Bundle {
     val AGC = new Bundle {
       val control = new AGCControlIO(params)
       val useAGC = Bool()
     }
+    val DCO = new Bundle {
+      val control = new DCOControlIO
+      val useDCO = Bool()
+    }
   }
-  val DCO = new Bundle {
-    val control = new DCOControlIO
-    val useDCO = Bool()
-  }
+  val imageRejectionOp = Bool()
   val debug = new Bundle {
     val enabled = Bool()
   }
@@ -103,7 +108,7 @@ class GFSKModemTuningIO extends Bundle {
       val r9 = UInt(4.W)
     }
   }
-  val dac = new Bundle { // Offset correction connects to here
+  val dac = new Bundle {
     val t0 = UInt(6.W)
     val t1 = UInt(6.W)
     val t2 = UInt(6.W)
@@ -123,10 +128,17 @@ class GFSKModemTuningIO extends Bundle {
   }
 }
 
+class GFSKModemControlIO(val params: BLEBasebandModemParams) extends Bundle {
+  val tx = new GFSKTXControlIO(params)
+  val rx = new GFSKRXControlIO()
+}
+
 class GFSKModem(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
-    val digital = new GFSKModemDigitalIO
     val analog = new GFSKModemAnalogIO(params)
+    val digital = new GFSKModemDigitalIO
+    val constants = Input(new BasebandConstants)
+    val control = new GFSKModemControlIO(params)
     val lutCmd = Flipped(Decoupled(new GFSKModemLUTCommand))
     val tuning = new Bundle {
       val data = new Bundle {
@@ -136,10 +148,13 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
         val q = new Bundle {
           val vgaAtten = Output(UInt(10.W))
         }
+        val dac = new Bundle {
+          val t0 = Output(UInt(6.W))
+          val t2 = Output(UInt(6.W))
+        }
       }
       val control = Input(new GFSKModemTuningControlIO(params))
     }
-    val constants = Input(new BasebandConstants)
   })
 
   val modemLUTs = Reg(new GFSKModemLUTs)
@@ -147,7 +162,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   // Manage SW set LUTs
   io.lutCmd.ready := true.B // TODO: either refactor to a valid only, or set ready based on controller state
 
-  when (io.lutCmd.fire()) { // Write an entry into the LUTs for the LO
+  when (io.lutCmd.fire()) { // Write an entry into the LUTs
     val lut = io.lutCmd.bits.lut
     val address = io.lutCmd.bits.address
     val value = io.lutCmd.bits.value
@@ -160,16 +175,27 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
         modemLUTs.LOCT(address) := value(7, 0)
       }
       is(GFSKModemLUTCodes.AGCI) {
-        modemLUTs.AGCI(address) := value(4, 0)
+        modemLUTs.AGCI(address) := value(9, 0)
       }
       is(GFSKModemLUTCodes.AGCQ) {
-        modemLUTs.AGCQ(address) := value(4, 0)
+        modemLUTs.AGCQ(address) := value(9, 0)
+      }
+      is(GFSKModemLUTCodes.DCOIFRONT) {
+        modemLUTs.DCOIFRONT(address) := value(5,0)
+      }
+      is(GFSKModemLUTCodes.DCOQFRONT) {
+        modemLUTs.DCOQFRONT(address) := value(5,0)
       }
     }
   }
 
-  val tx = Module(new GFSKTX())
+  val tx = Module(new GFSKTX(params))
+  tx.io.control <> io.control.tx
+
   val rx = Module(new GFSKRX(params))
+  rx.io.control.in.imageRejectionOp := io.tuning.control.imageRejectionOp
+  rx.io.control.in.enable := io.control.rx.in.enable
+  io.control.rx.out.preambleDetected := rx.io.control.out.preambleDetected
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
@@ -221,12 +247,21 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   io.tuning.data.q.vgaAtten := modemLUTs.AGCQ(qAGC.io.vgaLUTIndex)
 
   // DCO
-  val dco = Module(new DCO(params))
-  dco.io.control := io.tuning.control.DCO.control
-  dco.io.adcIn.valid := iQueue.io.deq.valid // TODO: How do we drive the 4 different DCO from 1 LUT
-  dco.io.adcIn.bits := iQueue.io.deq.valid // TODO: Do we only run DCO on I or should we run on an I and Q average?
+  val idcoFront = Module(new DCO(params))
+  idcoFront.io.control := io.tuning.control.i.DCO.control
+  idcoFront.io.adcIn.valid := iQueue.io.deq.valid
+  idcoFront.io.adcIn.bits := iQueue.io.deq.bits
 
-  // LUT defined outputs
+  io.tuning.data.dac.t0 := modemLUTs.DCOIFRONT(idcoFront.io.dcoLUTIndex)
+
+  val qdcoFront = Module(new DCO(params))
+  qdcoFront.io.control := io.tuning.control.q.DCO.control
+  qdcoFront.io.adcIn.valid := qQueue.io.deq.valid
+  qdcoFront.io.adcIn.bits := qQueue.io.deq.bits
+
+  io.tuning.data.dac.t2 := modemLUTs.DCOQFRONT(qdcoFront.io.dcoLUTIndex)
+
+  // Other LUT defined outputs
   io.analog.pllD := DontCare
   io.analog.loCT := modemLUTs.LOCT(io.constants.channelIndex)
   io.analog.tx.loFSK := modemLUTs.LOFSK(tx.io.analog.gfskIndex)

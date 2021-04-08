@@ -70,6 +70,6 @@ class CDR extends Module {
   dco.in.inc := kCounter.out.carry
   dco.in.dec := kCounter.out.borrow
 
-  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 10)._2))
+  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 5)._2))
 
 }

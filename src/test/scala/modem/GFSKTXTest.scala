@@ -13,7 +13,7 @@ import baseband.BLEBasebandModemParams
 
 class GFSKTXTest extends AnyFlatSpec with ChiselScalatestTester {
   it should "Elaborate a GFSKTX" in {
-    test(new GFSKTX).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new GFSKTX(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriver = new DecoupledDriverMaster(c.clock, c.io.digital.in)
 
       val inBits = Seq(1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0)

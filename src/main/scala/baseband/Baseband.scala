@@ -12,7 +12,6 @@ class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
   val crcSeed = UInt(24.W)
   val accessAddress = UInt(32.W)
-  val imageRejecionOp = Bool()
 }
 
 class BasebandDMAIO(addrBits: Int, beatBytes: Int) extends Bundle {
@@ -81,7 +80,12 @@ class BasebandIO(val addrBits: Int, val beatBytes: Int) extends Bundle {
   val constants = Input(new BasebandConstants)
   val control = new BasebandControlIO(addrBits)
   val dma = new BasebandDMAIO(addrBits, beatBytes)
-  val modem = Flipped(new GFSKModemDigitalIO)
+  val modem = new Bundle {
+    val digital = Flipped(new GFSKModemDigitalIO)
+    val control = new Bundle {
+      val preambleDetected = Input(Bool())
+    }
+  }
 }
 
 class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
@@ -107,6 +111,7 @@ class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
 
   disassembler.io.constants := io.constants
   disassembler.io.in.control <> io.control.disassembler.in
+  disassembler.io.in.preambleDetected := io.modem.control.preambleDetected
 
   io.control.disassembler.out <> disassembler.io.out.control
 
@@ -119,7 +124,7 @@ class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   val postAssemblerLoopback = Module(new DecoupledLoopback(UInt(1.W)))
   postAssemblerLoopback.io.select := io.control.loopback(1)
   postAssemblerLoopback.io.left.in <> assembler.io.out.data
-  io.modem.tx <> postAssemblerLoopback.io.right.out
-  postAssemblerLoopback.io.right.in <> io.modem.rx
+  io.modem.digital.tx <> postAssemblerLoopback.io.right.out
+  postAssemblerLoopback.io.right.in <> io.modem.digital.rx
   disassembler.io.in.data <> postAssemblerLoopback.io.left.out
 }

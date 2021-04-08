@@ -25,7 +25,10 @@ case class BLEBasebandModemParams (
 case object BLEBasebandModemKey extends Field[Option[BLEBasebandModemParams]](None)
 
 class BLEBasebandModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
-  val offChipMode = Output(Bool())
+  val offChipMode = new Bundle {
+    val rx = Output(Bool())
+    val tx = Output(Bool())
+  }
   val data = new modem.GFSKModemAnalogIO(params)
   val tuning = Output(new modem.GFSKModemTuningIO)
 }
@@ -156,6 +159,14 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val q_filter_r8 = RegInit(0.U(4.W))
   val q_filter_r9 = RegInit(0.U(4.W))
 
+  val i_DCO_useDCO = RegInit(false.B)
+  val i_DCO_reset = RegInit(false.B)
+  val i_DCO_gain = RegInit(32.U(8.W))
+
+  val q_DCO_useDCO = RegInit(false.B)
+  val q_DCO_reset = RegInit(false.B)
+  val q_DCO_gain = RegInit(32.U(8.W))
+
   val dac_t0 = RegInit(0.U(6.W))
   val dac_t1 = RegInit(0.U(6.W))
   val dac_t2 = RegInit(0.U(6.W))
@@ -166,6 +177,8 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val mux_dbg_out = RegInit(0.U(10.W))
   val enable_rx_i = RegInit(0.U(5.W))
   val enable_rx_q = RegInit(0.U(5.W))
+
+  val image_rejection_op = RegInit(false.B) // TODO: Griffin, you can set this to either initial value
 
   io.tuning.trim.g0 := trim_g0
   io.tuning.trim.g1 := trim_g1
@@ -217,6 +230,14 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.q.filter.r0 := q_filter_r8
   io.tuning.q.filter.r0 := q_filter_r9
 
+  io.tuningControl.i.DCO.useDCO := i_DCO_useDCO
+  io.tuningControl.i.DCO.control.reset := i_DCO_reset
+  io.tuningControl.i.DCO.control.gain := i_DCO_gain.asFixedPoint(6.BP)
+
+  io.tuningControl.q.DCO.useDCO := q_DCO_useDCO
+  io.tuningControl.q.DCO.control.reset := q_DCO_reset
+  io.tuningControl.q.DCO.control.gain := q_DCO_gain.asFixedPoint(6.BP)
+
   io.tuning.dac.t0 := dac_t0
   io.tuning.dac.t1 := dac_t1
   io.tuning.dac.t2 := dac_t2
@@ -228,6 +249,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.enable.rx.i := enable_rx_i
   io.tuning.enable.rx.q := enable_rx_q
 
+  io.tuningControl.imageRejectionOp := image_rejection_op
 
   interrupts(0) := io.back.interrupt
 
@@ -295,16 +317,23 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x3D -> Seq(
       RegField(4, q_filter_r8),
       RegField(4, q_filter_r9)),
-    0x3E -> Seq(RegField(6, dac_t0)), // DAC
-    0x3F -> Seq(RegField(6, dac_t1)),
-    0x40 -> Seq(RegField(6, dac_t2)),
-    0x41 -> Seq(RegField(6, dac_t3)),
-    0x42 -> Seq(RegField(1, enableDebug)), // Debug Configuration
-    0x43 -> Seq(RegField(10, mux_dbg_in)),
-    0x45 -> Seq(RegField(10, mux_dbg_out)),
-    0x47 -> Seq(RegField(5, enable_rx_i)), // Manual enable values
-    0x48 -> Seq(RegField(5, enable_rx_q)),
-    0x4C -> Seq(RegField.w(32, lutCmd)) // LUT Programming
+    0x3E -> Seq(RegField(1, i_DCO_useDCO)),
+    0x3F -> Seq(RegField(1, i_DCO_reset)),
+    0x40 -> Seq(RegField(8, i_DCO_gain)),
+    0x41 -> Seq(RegField(1, q_DCO_useDCO)),
+    0x42 -> Seq(RegField(1, q_DCO_reset)),
+    0x43 -> Seq(RegField(8, q_DCO_gain)),
+    0x44 -> Seq(RegField(6, dac_t0)),
+    0x45 -> Seq(RegField(6, dac_t1)),
+    0x46 -> Seq(RegField(6, dac_t2)),
+    0x47 -> Seq(RegField(6, dac_t3)),
+    0x48 -> Seq(RegField(1, enableDebug)), // Debug Configuration
+    0x49 -> Seq(RegField(10, mux_dbg_in)),
+    0x4B -> Seq(RegField(10, mux_dbg_out)),
+    0x4D -> Seq(RegField(5, enable_rx_i)), // Manual enable values
+    0x4E -> Seq(RegField(5, enable_rx_q)),
+    0x4F -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
+    0x50 -> Seq(RegField.w(32, lutCmd)) // LUT Programming
   )
 }
 
@@ -352,24 +381,36 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
 
   val modem = Module(new GFSKModem(params))
   modem.io.lutCmd <> basebandFrontend.io.back.lutCmd
-  modem.io.constants := controller.io.constants
-  modem.io.digital.tx <> baseband.io.modem.tx
-  modem.io.digital.rx <> baseband.io.modem.rx
   modem.io.analog.rx <> io.data.rx
+  modem.io.constants := controller.io.constants
+  modem.io.control <> controller.io.modemControl
+  modem.io.digital.tx <> baseband.io.modem.digital.tx
+  modem.io.digital.rx <> baseband.io.modem.digital.rx
   modem.io.tuning.control := basebandFrontend.io.tuningControl
   modem.io.analog.tx.pllReady := io.data.tx.pllReady
+
+  baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim
   io.tuning.mixer := basebandFrontend.io.tuning.mixer
   io.tuning.i.filter := basebandFrontend.io.tuning.i.filter
   io.tuning.q.filter := basebandFrontend.io.tuning.q.filter
+
+  io.tuning.dac.t0 := Mux(basebandFrontend.io.tuningControl.i.DCO.useDCO, modem.io.tuning.data.dac.t0, basebandFrontend.io.tuning.dac.t0)
+  io.tuning.dac.t1 := basebandFrontend.io.tuning.dac.t1
+  io.tuning.dac.t2 := Mux(basebandFrontend.io.tuningControl.q.DCO.useDCO, modem.io.tuning.data.dac.t2, basebandFrontend.io.tuning.dac.t2)
+  io.tuning.dac.t3 := basebandFrontend.io.tuning.dac.t3
+
   io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.AGC.useAGC, modem.io.tuning.data.i.vgaAtten, basebandFrontend.io.tuning.i.vgaAtten)
   io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.AGC.useAGC, modem.io.tuning.data.q.vgaAtten, basebandFrontend.io.tuning.q.vgaAtten)
+
   io.tuning.enable.rx.i := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.i, controller.io.analog.enable.rx)
   io.tuning.enable.rx.q := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.q, controller.io.analog.enable.rx)
 
   io.data.pllD := controller.io.analog.pllD
   io.data.loCT := modem.io.analog.loCT
   io.data.tx.loFSK := modem.io.analog.tx.loFSK
+
+  io.offChipMode := controller.io.analog.offChipMode
 }

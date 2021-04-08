@@ -9,6 +9,7 @@ import baseband.BLEBasebandModemParams
 import chisel3.util.{Counter, ShiftRegister}
 
 import scala.collection.immutable.Seq
+import scala.util.Random
 
 class DCOTestHarness extends Module {
   val io = IO(new Bundle {
@@ -38,6 +39,22 @@ class CDRTestHarness extends Module {
 }
 
 class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
+  var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
+  def whiten(b: Int): Int = {
+    val last = lfsr.last
+    lfsr = lfsr.indices.map { i =>
+
+      if (i == 0) {
+        lfsr.last
+      } else if (i == 4) {
+        lfsr.last ^ lfsr(3)
+      } else {
+        lfsr(i - 1)
+      }
+    }
+    last ^ b
+  }
+
   it should "Expected DCO behavior" in {
     test(new DCOTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.inc.poke(false.B)
@@ -75,8 +92,8 @@ class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
   }
   it should "Generate Waveform" in {
     test(new CDRTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val input = Seq.tabulate(50){_ % 2 == 0}
-      c.clock.step(10 + 15)
+      val input = Seq.tabulate(8){_ % 2} ++ Seq.tabulate(100){_ => Random.nextInt(2)}.map{whiten(_)}
+      c.clock.step(10 + 10)
       input.foreach { b =>
         c.io.d.poke(b.B)
         c.clock.step(20)

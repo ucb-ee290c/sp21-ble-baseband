@@ -10,7 +10,7 @@ import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem.BaseSubsystem
 
 // We trigger the PA by sending it the Access Address we wish to write a packet for and the length of the PDU body,
-// which is known from the RoCC command we are sent (R[rs2] - 2)
+// which is known from the command we are sent
 class PAControlInputBundle extends Bundle {
   val aa = UInt(32.W)
   val pduLength = UInt(8.W)
@@ -74,7 +74,6 @@ class PacketAssembler extends Module {
   // Internal Counters
   val counter = RegInit(0.U(8.W)) // Counts bytes in a given message component
   val counter_byte = RegInit(0.U(3.W)) // Counts bit place within a given byte
-  // TODO: Add another counter to interface with some arbitrary width interface in beatBytes bytes
 
   // Data registers
   val data = RegInit(0.U(8.W))
