@@ -122,7 +122,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val numberOfBits = 100
+      val numberOfBits = 250
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
       val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
@@ -130,9 +130,11 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(bits.size * 20)
-      println(outMonitor.monitoredTransactions.map{_.data.litValue})
+
       lfsr = Seq(1,0,0,0,0,0,0)
-      assert(packet.zip(outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}).forall {p => p._1 == p._2})
+      val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}
+      println(retrieved)
+      assert(packet.zip(retrieved).forall {p => p._1 == p._2})
     }
   }
   it should "PASS Radio Frequency" in {
