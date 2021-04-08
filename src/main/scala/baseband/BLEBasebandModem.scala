@@ -50,11 +50,20 @@ class BLEBasebandModemStatus extends Bundle {
   val status4 = UInt(32.W)
 }
 
+class BLEBasebandModemInterrupts extends Bundle {
+  val error = Bool()
+  val rxStart = Bool()
+  val rxFinish = Bool()
+  val txFinish = Bool()
+  val timer1 = Bool()
+  val timer2 = Bool()
+}
+
 class BLEBasebandModemBackendIO extends Bundle {
   val cmd = Decoupled(new BLEBasebandModemCommand)
   val lutCmd = Decoupled(new GFSKModemLUTCommand)
   val status = Input(new BLEBasebandModemStatus)
-  val interrupt = Input(Bool())
+  val interrupt = Input(new BLEBasebandModemInterrupts)
 }
 
 trait BLEBasebandModemFrontendBundle extends Bundle {
@@ -251,7 +260,13 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   io.tuningControl.imageRejectionOp := image_rejection_op
 
-  interrupts(0) := io.back.interrupt
+  // Interrupts
+  interrupts(0) := io.back.interrupt.error
+  interrupts(1) := io.back.interrupt.rxStart
+  interrupts(2) := io.back.interrupt.rxFinish
+  interrupts(3) := io.back.interrupt.txFinish
+  interrupts(4) := io.back.interrupt.timer1
+  interrupts(5) := io.back.interrupt.timer2
 
   regmap(
     0x00 -> Seq(RegField.w(32, inst)), // Command start
@@ -340,7 +355,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 class BLEBasebandModemFrontend(params: BLEBasebandModemParams, beatBytes: Int)(implicit p: Parameters)
   extends TLRegisterRouter(
     params.address, "baseband", Seq("ucbbar, riscv"),
-    beatBytes = beatBytes, interrupts = 1)( // TODO: Interrupts and compatible list
+    beatBytes = beatBytes, interrupts = 6)( // TODO: Interrupts and compatible list
       new TLRegBundle(params, _) with BLEBasebandModemFrontendBundle)(
       new TLRegModule(params, _, _) with BLEBasebandModemFrontendModule)
 
@@ -364,21 +379,23 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   val basebandFrontend = outer.basebandFrontend.module
   val dma = outer.dma.module
 
-  basebandFrontend.io.back.interrupt := false.B
-
+  // Incoming Command Queue
   val cmdQueue = Queue(basebandFrontend.io.back.cmd, params.cmdQueueDepth)
 
+  // Controller
   val controller = Module(new Controller(params, beatBytes))
   controller.io.cmd <> cmdQueue
   controller.io.dma.readReq <> dma.io.read.req
   controller.io.dma.readResp <> dma.io.read.resp
 
+  // Baseband
   val baseband = Module(new Baseband(params, beatBytes))
   baseband.io.control <> controller.io.basebandControl
   baseband.io.constants := controller.io.constants
   baseband.io.dma.readData <> dma.io.read.queue
   baseband.io.dma.writeReq <> dma.io.write.req
 
+  // Modem
   val modem = Module(new GFSKModem(params))
   modem.io.lutCmd <> basebandFrontend.io.back.lutCmd
   modem.io.analog.rx <> io.data.rx
@@ -390,6 +407,14 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   modem.io.analog.tx.pllReady := io.data.tx.pllReady
 
   baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
+
+  // Interrupts
+  basebandFrontend.io.back.interrupt.error := controller.io.interrupt.error // TODO: Add more blocks with errors here
+  basebandFrontend.io.back.interrupt.rxStart := controller.io.interrupt.rxStart
+  basebandFrontend.io.back.interrupt.rxFinish := controller.io.interrupt.rxFinish
+  basebandFrontend.io.back.interrupt.txFinish := controller.io.interrupt.txFinish
+  basebandFrontend.io.back.interrupt.timer1 := DontCare
+  basebandFrontend.io.back.interrupt.timer2 := DontCare
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim
