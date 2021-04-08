@@ -79,7 +79,7 @@ class GFSKModemTuningIO extends Bundle {
     val r3 = UInt(4.W)
   }
   val i = new Bundle {
-    val vgaAtten = UInt(5.W)
+    val vgaAtten = UInt(10.W)
     val filter = new Bundle {
       val r0 = UInt(4.W)
       val r1 = UInt(4.W)
@@ -94,7 +94,7 @@ class GFSKModemTuningIO extends Bundle {
     }
   }
   val q = new Bundle {
-    val vgaAtten = UInt(5.W)
+    val vgaAtten = UInt(10.W)
     val filter = new Bundle {
       val r0 = UInt(4.W)
       val r1 = UInt(4.W)
@@ -194,6 +194,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
 
   val rx = Module(new GFSKRX(params))
   rx.io.control.in.imageRejectionOp := io.tuning.control.imageRejectionOp
+  rx.io.control.in.enable := io.control.rx.in.enable
   io.control.rx.out.preambleDetected := rx.io.control.out.preambleDetected
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)

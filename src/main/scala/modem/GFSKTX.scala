@@ -31,7 +31,7 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
     val control = new GFSKTXControlIO(params)
   })
 
-  val maxPacketSize = 1 + 4 + 2 + params.maxReadSize + 3
+  private val maxPacketSize = 1 + 4 + 2 + params.maxReadSize + 3
 
   val s_idle :: s_working :: nil = Enum(2)
 
@@ -55,7 +55,7 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
   val fir = Module(new GenericFIR(FixedPoint(2.W, 0.BP), FixedPoint(11.W, 6.BP), firWeights))
   fir.io.in.valid := firInValid
   fir.io.in.bits.data := firInData
-  fir.io.out.ready := true.B // TODO: Make this based on TX mode?
+  fir.io.out.ready := state === s_idle
 
   io.digital.in.ready := counter === 0.U && state === s_working
 
