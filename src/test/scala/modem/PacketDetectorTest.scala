@@ -13,7 +13,7 @@ import scala.collection.immutable.Seq
 class PacketDetectorTest extends AnyFlatSpec with ChiselScalatestTester {
   val packetPattern = Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => i%2 } }
   it should "Perfectly Match Packet Preamble" in {
-    test(new PreambleDetector()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new PreambleCorrelator()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.firstBit.poke(0.U)
       c.io.in.poke(0.U)
       Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => i%2 } }.foreach { e =>
@@ -26,7 +26,7 @@ class PacketDetectorTest extends AnyFlatSpec with ChiselScalatestTester {
   it should "Pass Fuzz Test" in {
     for (i <- 1 to 100) {
       val seq = Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => Random.nextInt(1) } }
-      test(new PreambleDetector()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      test(new PreambleCorrelator()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
         c.io.firstBit.poke(0.U)
         c.io.in.poke(0.U)
         seq.foreach { e =>

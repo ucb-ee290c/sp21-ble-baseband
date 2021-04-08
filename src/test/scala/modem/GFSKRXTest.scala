@@ -36,7 +36,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   }
 
   gfskRX.control.in.imageRejectionOp := 0.B
-
+  gfskRX.control.in.enable := 1.B
   gfskRX.analog <> io.analog
   io.digital.out.bits := gfskRX.digital.out.bits
   io.digital.out.valid := preambleDetected & gfskRX.digital.out.valid
@@ -122,7 +122,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val numberOfBits = 250
+      val numberOfBits = 500
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
       val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)

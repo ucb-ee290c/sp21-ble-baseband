@@ -6,10 +6,11 @@ import chiseltest.experimental.TestOptionBuilder._
 import chiseltest.internal.{TreadleBackendAnnotation, VerilatorBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
 import baseband.BLEBasebandModemParams
-import chisel3.util.{Counter, ShiftRegister}
+import chisel3.util._
 
 import scala.collection.immutable.Seq
 import scala.util.Random
+import verif._
 
 class DCOTestHarness extends Module {
   val io = IO(new Bundle {
@@ -27,15 +28,31 @@ class CDRTestHarness extends Module {
   val io = IO(new Bundle {
     val d = Input(Bool())
     val edge = Output(Bool())
+    val symbol = Decoupled(UInt(1.W))
   })
-  def detectEdge(x: Bool) = x =/= RegNext(x)
+  def risingedge(x: Bool) = x && !RegNext(x)
+  val cdr = Module(new FPSCDR)
 
-  val shiftClk = Wire(Bool())
+  val preambleDetector = Module(new PreambleDetector())
 
-  val cdr = Module(new CDR)
+  preambleDetector.io.control.firstBit := 1.U // TODO: This should be related to the access address
+  preambleDetector.io.in := io.d
+  preambleDetector.io.control.threshold := 135.U // TODO: THIS SHOULD BE MMIO
+  preambleDetector.io.control.reset := io.edge
+
+  val preambleDetected = RegInit(0.B)
+  when (risingedge(preambleDetector.io.detected && io.edge)) {
+    preambleDetected := 1.B
+  }
+
   cdr.io.d := io.d
-  shiftClk := ShiftRegister(cdr.io.clk, 10)
-  io.edge := detectEdge(shiftClk)
+  io.edge := risingedge(cdr.io.clk)
+
+  val accumulator = Wire(SInt(8.W))
+  accumulator := RegNext(Mux(io.edge, 0.S, accumulator + Mux(io.d, 1.S, (-1).S).asSInt()), 0.S(8.W))
+  io.symbol.valid := io.edge & preambleDetected
+  io.symbol.bits := Mux(accumulator > 0.S, 1.U, 0.U)
+
 }
 
 class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
@@ -54,7 +71,7 @@ class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
     }
     last ^ b
   }
-
+/*
   it should "Expected DCO behavior" in {
     test(new DCOTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.inc.poke(false.B)
@@ -90,14 +107,63 @@ class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
       assert(c.io.count.peek().litValue() == 11)
     }
   }
-  it should "Generate Waveform" in {
-    test(new CDRTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val input = Seq.tabulate(8){_ % 2} ++ Seq.tabulate(100){_ => Random.nextInt(2)}.map{whiten(_)}
-      c.clock.step(10 + 10)
-      input.foreach { b =>
-        c.io.d.poke(b.B)
-        c.clock.step(20)
+*/
+  it should "Shift Pulse" in {
+    for (i <- 0 until 100) {
+      test(new CDRTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+        val packet = Seq.tabulate(100) { _ => Random.nextInt(2) }.map {
+          whiten(_)
+        }
+        val outDriver = new DecoupledDriverSlave(c.clock, c.io.symbol)
+        val outMonitor = new DecoupledMonitor(c.clock, c.io.symbol)
+        val phaseOffset = Random.nextInt(21)
+        c.clock.step(phaseOffset) // phase offset
+        val input = Seq(1, 0, 1, 0, 1, 0, 1, 0) ++ packet
+        input.foreach { b =>
+          c.io.d.poke(b.B)
+          c.clock.step(20)
+        }
+        c.clock.step(10)
+        val retrieved = outMonitor.monitoredTransactions.map {
+          _.data.litValue.toInt
+        }
+        print("RUN:", i, "\n")
+        print("PACKET:", packet, "\n")
+        print("OUTPUT:", retrieved, "\n")
+        print("OFFSET:", phaseOffset, "\n")
+        assert(retrieved.reverse.zip(packet.reverse).forall { p => p._1 == p._2 })
       }
     }
   }
+
+  /*
+  it should "Generate Waveform" in {
+    for (i <- 0 until 100) {
+      test(new CDRTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+        val packet = Seq.tabulate(100) { _ => Random.nextInt(2) }.map {
+          whiten(_)
+        }
+        val outDriver = new DecoupledDriverSlave(c.clock, c.io.symbol)
+        val outMonitor = new DecoupledMonitor(c.clock, c.io.symbol)
+        val phaseOffset = Random.nextInt(21)
+        c.clock.step(phaseOffset) // phase offset
+        val input = Seq(1, 0, 1, 0, 1, 0, 1, 0) ++ packet
+        input.foreach { b =>
+          c.io.d.poke(b.B)
+          c.clock.step(20)
+        }
+        c.clock.step(10)
+        val retrieved = outMonitor.monitoredTransactions.map {
+          _.data.litValue.toInt
+        }
+        print("RUN:", i, "\n")
+        print("PACKET:", packet, "\n")
+        print("OUTPUT:", retrieved, "\n")
+        print("OFFSET:", phaseOffset, "\n")
+        assert(retrieved.reverse.zip(packet.reverse).forall { p => p._1 == p._2 })
+      }
+    }
+  }
+
+   */
 }

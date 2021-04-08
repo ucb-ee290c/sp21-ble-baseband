@@ -43,7 +43,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   def risingedge(x: Bool) = x && !RegNext(x)
 
   val guess = Wire(Bool())
-  val cdr = Module(new CDR)
+  val cdr = Module(new FPSCDR)
   val beginSampling = Wire(Bool())
   guess := demod.io.guess.bits
   demod.io.guess.ready := io.control.in.enable
