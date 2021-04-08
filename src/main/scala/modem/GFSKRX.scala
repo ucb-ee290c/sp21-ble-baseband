@@ -55,18 +55,12 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   io.digital.out.bits := Mux(accumulator > 0.S, 1.U, 0.U)
 
   val preambleDetector = Module(new PreambleDetector())
-  preambleDetector.io.firstBit := 1.U
+
+  preambleDetector.io.control.firstBit := 1.U // TODO: This should be related to the access address
   preambleDetector.io.in := guess
-  val matches = Wire(Bool())
-  val sawMatch = RegInit(0.B)
-  when (risingedge(matches)) {
-    sawMatch := 1.B
-  }
-  when (beginSampling) {
-    sawMatch := 0.B
-  }
-  matches := preambleDetector.io.matches > 140.U
+  preambleDetector.io.control.threshold := 140.U // TODO: THIS SHOULD BE MMIO
+  preambleDetector.io.control.reset := beginSampling
 
   // TODO: This is kind of an edge case, the NEXT bit that will be integrated over is the beginning of the packet
-  io.control.out.preambleDetected := beginSampling & sawMatch // TODO: this could be problematic if the match is detected exactly at the end
+  io.control.out.preambleDetected := beginSampling & preambleDetector.io.detected // TODO: this could be problematic if the match is detected exactly at the end
 }
