@@ -6,6 +6,32 @@ import chisel3.util._
 class PreambleDetector extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(1.W))
+    val control = Input(new Bundle {
+      val firstBit = UInt(1.W)
+      val reset = Input(Bool())
+      val threshold = UInt(log2Ceil(20 * 8 + 1).W)
+    })
+    val detected = Output(Bool())
+  })
+  val correlator = Module(new PreambleCorrelator).io
+  correlator.in := io.in
+  correlator.firstBit := io.control.firstBit
+
+  val matches = Wire(Bool())
+  val sawMatch = RegInit(0.B)
+  def risingedge(x: Bool) = x && !RegNext(x)
+  when (risingedge(matches)) {
+    sawMatch := 1.B
+  }.elsewhen (io.control.reset) {
+    sawMatch := 0.B
+  }
+  matches := correlator.matches > io.control.threshold
+  io.detected := sawMatch
+}
+
+class PreambleCorrelator extends Module {
+  val io = IO(new Bundle {
+    val in = Input(UInt(1.W))
     val firstBit = Input(UInt(1.W))
     val matches = Output(UInt(log2Ceil(20 * 8 + 1).W))
   })
