@@ -95,13 +95,21 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
-  def RFtoIF(in: Seq[Double], Fc: Double): Seq[(Double, Double)] = {
+  def RFtoIF(in: Seq[Double], Fc: Double, imageIn: Seq[Double] = Seq(), imageFc: Double = F_IM): Seq[(Double, Double)] = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length / 10)).toInt)(_ * (1/(analog_F_sample)))
     val frequencies = timeSteps.map {t => Fc + in((t / (symbol_time / 10)).floor.toInt) * 0.25 * MHz }
     val phases = frequencies.map{var s: Double = 0.0; d => {s += d; 2 * math.Pi * s * (1/analog_F_sample)}}
     val rf = phases.map {math.cos(_)}
-    val I = timeSteps.indices.map {i => rf(i) * math.cos(2 * math.Pi * F_LO * timeSteps(i))}
-    val Q = timeSteps.indices.map {i => rf(i) * math.sin(2 * math.Pi * F_LO * timeSteps(i))}
+    var signal = rf
+    if (imageIn.size > 0) {
+      val image_frequencies = timeSteps.map {t => imageFc + imageIn((t / (symbol_time / 10)).floor.toInt) * 0.25 * MHz }
+      val image_phases = image_frequencies.map{var s: Double = math.Pi / 4; d => {s += d; 2 * math.Pi * s * (1/analog_F_sample)}}
+      val image = image_phases.map {v => math.cos(v)}
+      signal = rf.zip(image).map {p => p._1 + p._2}
+    }
+
+    val I = timeSteps.indices.map {i => signal(i) * math.cos(2 * math.Pi * F_LO * timeSteps(i))}
+    val Q = timeSteps.indices.map {i => signal(i) * math.sin(2 * math.Pi * F_LO * timeSteps(i))}
     return analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz)
   }
   def analogToDigital(in: (Seq[(Double, Double)])): (Seq[(Int, Int)]) = {
@@ -114,7 +122,8 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 
   def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
-    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+    val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
+    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency, FIR(bitstream(imageBits), gaussian_weights)))
   }
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
@@ -122,35 +131,36 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val numberOfBits = 500
+      val numberOfBits = 25
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
       val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
       val input = testWaveform(bits)
+      val initialPhaseOffset = Random.nextInt(20)
+      c.clock.step(initialPhaseOffset) // random phase offset
       inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(bits.size * 20)
 
       lfsr = Seq(1,0,0,0,0,0,0)
       val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}
-      println(retrieved)
-      assert(packet.zip(retrieved).forall {p => p._1 == p._2})
+      println("Initial Phase Offset: ",initialPhaseOffset, "Received Data: ", retrieved, "Expected Data: ", packet)
+      assert(retrieved.size > 0 && packet.zip(retrieved).forall {p => p._1 == p._2})
     }
   }
   it should "PASS Radio Frequency" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.out.data.ready.poke(1.B)
+      c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
       val input = testWaveform(Seq(0,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0))
       while (i < input.length) {
-        c.io.in.i.bits.poke(input(i)._1.asUInt())
-        c.io.in.q.bits.poke(input(i)._2.asUInt())
-        c.io.in.q.valid.poke((i < input.length).asBool())
-        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.io.in.bits.i.poke(input(i)._1.asUInt())
+        c.io.in.bits.q.poke(input(i)._2.asUInt())
+        c.io.in.valid.poke((i < input.length).asBool())
         c.clock.step()
-       if (c.io.out.data.valid.peek().litToBoolean)
-          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+       if (c.io.out.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
       print("Output:\n")
@@ -161,18 +171,17 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "REJECT IMAGE" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.out.data.ready.poke(1.B)
+      c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
       val input = testWaveform(Seq(0,0,0,1,1,1,0,0,0,1,1,1,0,0,0), F_IM)
       while (i < input.length) {
-        c.io.in.i.bits.poke(input(i)._1.asUInt())
-        c.io.in.q.bits.poke(input(i)._2.asUInt())
-        c.io.in.q.valid.poke((i < input.length).asBool())
-        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.io.in.bits.i.poke(input(i)._1.asUInt())
+        c.io.in.bits.q.poke(input(i)._2.asUInt())
+        c.io.in.valid.poke((i < input.length).asBool())
         c.clock.step()
-       if (c.io.out.data.valid.peek().litToBoolean)
-          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+       if (c.io.out.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
       print("Output:\n")

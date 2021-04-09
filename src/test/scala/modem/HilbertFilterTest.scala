@@ -67,17 +67,16 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "REJECT IMAGE" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.out.data.ready.poke(1.B)
+      c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_image.length) {
-        c.io.in.i.bits.poke(mock_input_I_image(i).asUInt())
-        c.io.in.q.bits.poke(mock_input_Q_image(i).asUInt())
-        c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
-        c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.bits.i.poke(mock_input_I_image(i).asUInt())
+        c.io.in.bits.q.poke(mock_input_Q_image(i).asUInt())
+        c.io.in.valid.poke((i < mock_input_I_rf.length).asBool())
         c.clock.step()
-       if (c.io.out.data.valid.peek().litToBoolean)
-          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+       if (c.io.out.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
       assert(arr.max - arr.min < mock_input_I_image.max - mock_input_I_image.min)
@@ -86,17 +85,16 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Do something else" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.out.data.ready.poke(1.B)
+      c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_mixed.length) {
-        c.io.in.i.bits.poke(mock_input_I_mixed(i).asUInt())
-        c.io.in.q.bits.poke(mock_input_Q_mixed(i).asUInt())
-        c.io.in.q.valid.poke((i < mock_input_I_mixed.length).asBool())
-        c.io.in.i.valid.poke((i < mock_input_I_mixed.length).asBool())
+        c.io.in.bits.i.poke(mock_input_I_mixed(i).asUInt())
+        c.io.in.bits.q.poke(mock_input_Q_mixed(i).asUInt())
+        c.io.in.valid.poke((i < mock_input_I_mixed.length).asBool())
         c.clock.step()
-       if (c.io.out.data.valid.peek().litToBoolean)
-          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+       if (c.io.out.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
       print("MIXED:\n")
@@ -107,17 +105,16 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Do something else again" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      c.io.out.data.ready.poke(1.B)
+      c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_rf.length) {
-        c.io.in.i.bits.poke(mock_input_I_rf(i).asUInt())
-        c.io.in.q.bits.poke(mock_input_Q_rf(i).asUInt())
-        c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
-        c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.bits.i.poke(mock_input_I_rf(i).asUInt())
+        c.io.in.bits.q.poke(mock_input_Q_rf(i).asUInt())
+        c.io.in.valid.poke((i < mock_input_I_rf.length).asBool())
         c.clock.step()
-       if (c.io.out.data.valid.peek().litToBoolean)
-          arr = arr ++ Seq(c.io.out.data.bits.peek().litValue())
+       if (c.io.out.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
       print("RF ONLY:\n")

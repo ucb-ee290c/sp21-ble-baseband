@@ -75,7 +75,7 @@ object FIRCoefficients {
   /* Design Parameters:
       Order: 20, Fs: 20MHz, Fp: 1MHz, Fs: 2MHz
   */
-  var envelopeDetector = Seq[Double](elems =
+  var envelopeDetector = Seq[Double](elems = // TODO, is this appropriate for the cutoff frequency?
       -0.038983361544761306605177964001995860599,
       -0.018680941683653921187024948835642135236,
       -0.014614362321783348763748477949775406159,

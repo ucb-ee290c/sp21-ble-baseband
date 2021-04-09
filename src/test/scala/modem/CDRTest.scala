@@ -109,14 +109,14 @@ class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 */
   it should "Shift Pulse" in {
-    for (i <- 0 until 100) {
+    //for (i <- 0 until 10) {
       test(new CDRTestHarness()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
         val packet = Seq.tabulate(100) { _ => Random.nextInt(2) }.map {
           whiten(_)
         }
         val outDriver = new DecoupledDriverSlave(c.clock, c.io.symbol)
         val outMonitor = new DecoupledMonitor(c.clock, c.io.symbol)
-        val phaseOffset = Random.nextInt(21)
+        val phaseOffset = 10//Random.nextInt(21)
         c.clock.step(phaseOffset) // phase offset
         val input = Seq(1, 0, 1, 0, 1, 0, 1, 0) ++ packet
         input.foreach { b =>
@@ -127,13 +127,13 @@ class CDRTest extends AnyFlatSpec with ChiselScalatestTester {
         val retrieved = outMonitor.monitoredTransactions.map {
           _.data.litValue.toInt
         }
-        print("RUN:", i, "\n")
+        //print("RUN:", i, "\n")
         print("PACKET:", packet, "\n")
         print("OUTPUT:", retrieved, "\n")
         print("OFFSET:", phaseOffset, "\n")
         assert(retrieved.reverse.zip(packet.reverse).forall { p => p._1 == p._2 })
       }
-    }
+    //}
   }
 
   /*

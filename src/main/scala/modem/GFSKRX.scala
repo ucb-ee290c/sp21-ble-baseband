@@ -21,7 +21,7 @@ class GFSKRXControlIO extends Bundle {
 
 class GFSKRX(params: BLEBasebandModemParams) extends Module {
   val io = IO(new Bundle {
-    val analog = new Bundle {
+    val analog = new Bundle { //TODO: can we make it so that this whole bundle is decoupled?
       val i = Flipped(Decoupled(UInt(params.adcBits.W)))
       val q = Flipped(Decoupled(UInt(params.adcBits.W)))
     }
@@ -32,12 +32,17 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   })
 
   val imageRejection = Module (new HilbertFilter(params))
-  imageRejection.io.in <> io.analog
+  imageRejection.io.in.valid := io.analog.i.valid && io.analog.q.valid
+  imageRejection.io.in.bits.i := io.analog.i.bits
+  imageRejection.io.in.bits.q := io.analog.q.bits
+  imageRejection.io.control.operation := io.control.in.imageRejectionOp
+  io.analog.i.ready := imageRejection.io.in.ready
+  io.analog.q.ready := imageRejection.io.in.ready
 
   val demod = Module(new GFSKDemodulation(params))
-  demod.io.signal.bits := imageRejection.io.out.data.bits(6,1).asSInt()
-  demod.io.signal.valid := imageRejection.io.out.data.valid
-  imageRejection.io.out.data.ready := demod.io.signal.ready
+  demod.io.signal.bits := imageRejection.io.out.bits(6,1).asSInt()
+  demod.io.signal.valid := imageRejection.io.out.valid
+  imageRejection.io.out.ready := demod.io.signal.ready
 
   def detectEdge(x: Bool) = x =/= RegNext(x)
   def risingedge(x: Bool) = x && !RegNext(x)
