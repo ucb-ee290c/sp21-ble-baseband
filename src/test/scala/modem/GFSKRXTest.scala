@@ -15,6 +15,10 @@ import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
+
+import breeze.stats.distributions.Gaussian
+import breeze.plot._
+
 import verif._
 
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
@@ -120,6 +124,72 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
     analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
   }
+
+  def noisyTestWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, noiseAmplitude: Double = 1.0): (Seq[(Int, Int)]) = {
+    val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
+    val cleanSignal = analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+
+    val noiseGen = Gaussian(0, 31.toDouble/6) // Gaussian with SD such that most data is between +/- 15.5
+    val noise = noiseGen.sample(cleanSignal.length).zip(noiseGen.sample(cleanSignal.length))
+
+    val noisySignal = cleanSignal.zip(noise).map { case ((i, q), (iNoise, qNoise)) =>
+      (i + noiseAmplitude * iNoise, q + noiseAmplitude * qNoise)
+    }.map { case (iNoisy, qNoisy) =>
+      (math.max(0, math.min(31, iNoisy.round)).toInt, math.max(0, math.min(31, qNoisy.round)).toInt)
+    }
+
+    val f = Figure()
+    val p = f.subplot(0)
+    p += plot(Seq.tabulate(100)(i => i), cleanSignal.map { case (i, q) => i }.take(100))
+    p += plot(Seq.tabulate(100)(i => i), noisySignal.map { case (i, q) => i }.take(100), colorcode = "r")
+    f.saveas(s"SignalPlot${noiseAmplitude}.png")
+
+    noisySignal
+  }
+
+  it should "Determine SNR vs BER" in {
+    val numberOfBits = 50
+    val preamble = Seq(1,0,1,0,1,0,1,0)
+
+    val SNRvBER = Seq.tabulate(11)(i => {
+      val noiseAmplitude = i.toDouble / 10
+      val SNR = 1 / noiseAmplitude
+      var BER = 2.0
+
+      println(s"Testing SNR of ${SNR}:")
+
+      test(new GFSKRXTestModule(BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+        val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
+        val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
+        val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
+        val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
+
+        val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
+        val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
+        val input = noisyTestWaveform(bits, noiseAmplitude = noiseAmplitude)
+        //val initialPhaseOffset = Random.nextInt(20)
+        //c.clock.step(initialPhaseOffset) // random phase offset
+
+        inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
+        inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
+        c.clock.step(bits.size * 20)
+
+        lfsr = Seq(1,0,0,0,0,0,0)
+        val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}
+        //println("Initial Phase Offset: ",initialPhaseOffset, "Received Data: ", retrieved, "Expected Data: ", packet)
+        assert(retrieved.size > 0)
+        BER = 1.0 - ((packet.zip(retrieved).count { case (observed, expected) => observed == expected }).toDouble / packet.length)
+
+        println((SNR, BER))
+      }
+
+      (SNR, BER)
+    })
+
+    println(SNRvBER)
+  }
+
+
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)

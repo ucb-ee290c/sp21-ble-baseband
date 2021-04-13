@@ -189,6 +189,9 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   val image_rejection_op = RegInit(false.B) // TODO: Griffin, you can set this to either initial value
 
+  val errorMessage = Wire(new DecoupledIO(UInt(32.W)))
+  val rxFinishMessage = Wire(new DecoupledIO(UInt(32.W)))
+
   io.tuning.trim.g0 := trim_g0
   io.tuning.trim.g1 := trim_g1
   io.tuning.trim.g2 := trim_g2
@@ -285,70 +288,72 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x22 -> Seq(RegField(8, trim_g6)),
     0x23 -> Seq(RegField(8, trim_g7)),
     0x24 -> Seq( // Mixer
-      RegField(4, mixer_r0),
-      RegField(4, mixer_r1)),
+      RegField.w(4, mixer_r0),
+      RegField.w(4, mixer_r1)),
     0x25 -> Seq(
-      RegField(4, mixer_r2),
-      RegField(4, mixer_r3)),
-    0x26 -> Seq(RegField(10, i_vgaAtten)), // I VGA
-    0x28 -> Seq(RegField(1, i_vgaAtten_reset)),
-    0x29 -> Seq(RegField(1, i_vgaAtten_useAGC)),
-    0x2A -> Seq(RegField(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
-    0x2B -> Seq(RegField(params.adcBits, i_vgaAtten_idealPeakToPeak)),
-    0x2C -> Seq(RegField(8, i_vgaAtten_gain)),
+      RegField.w(4, mixer_r2),
+      RegField.w(4, mixer_r3)),
+    0x26 -> Seq(RegField.w(10, i_vgaAtten)), // I VGA
+    0x28 -> Seq(RegField.w(1, i_vgaAtten_reset)),
+    0x29 -> Seq(RegField.w(1, i_vgaAtten_useAGC)),
+    0x2A -> Seq(RegField.w(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
+    0x2B -> Seq(RegField.w(params.adcBits, i_vgaAtten_idealPeakToPeak)),
+    0x2C -> Seq(RegField.w(8, i_vgaAtten_gain)),
     0x2D -> Seq( // I Filter
-      RegField(4, i_filter_r0),
-      RegField(4, i_filter_r1)),
+      RegField.w(4, i_filter_r0),
+      RegField.w(4, i_filter_r1)),
     0x2E -> Seq(
-      RegField(4, i_filter_r2),
-      RegField(4, i_filter_r3)),
+      RegField.w(4, i_filter_r2),
+      RegField.w(4, i_filter_r3)),
     0x2F -> Seq(
-      RegField(4, i_filter_r4),
-      RegField(4, i_filter_r5)),
+      RegField.w(4, i_filter_r4),
+      RegField.w(4, i_filter_r5)),
     0x30 -> Seq(
-      RegField(4, i_filter_r6),
-      RegField(4, i_filter_r7)),
+      RegField.w(4, i_filter_r6),
+      RegField.w(4, i_filter_r7)),
     0x31 -> Seq(
-      RegField(4, i_filter_r8),
-      RegField(4, i_filter_r9)),
-    0x32 -> Seq(RegField(10, q_vgaAtten)), // Q VGA
-    0x34 -> Seq(RegField(1, q_vgaAtten_reset)),
-    0x35 -> Seq(RegField(1, q_vgaAtten_useAGC)),
-    0x36 -> Seq(RegField(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
-    0x37 -> Seq(RegField(params.adcBits, q_vgaAtten_idealPeakToPeak)),
-    0x38 -> Seq(RegField(8, q_vgaAtten_gain)),
+      RegField.w(4, i_filter_r8),
+      RegField.w(4, i_filter_r9)),
+    0x32 -> Seq(RegField.w(10, q_vgaAtten)), // Q VGA
+    0x34 -> Seq(RegField.w(1, q_vgaAtten_reset)),
+    0x35 -> Seq(RegField.w(1, q_vgaAtten_useAGC)),
+    0x36 -> Seq(RegField.w(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
+    0x37 -> Seq(RegField.w(params.adcBits, q_vgaAtten_idealPeakToPeak)),
+    0x38 -> Seq(RegField.w(8, q_vgaAtten_gain)),
     0x39 -> Seq( // Q Filter
-      RegField(4, q_filter_r0),
-      RegField(4, q_filter_r1)),
+      RegField.w(4, q_filter_r0),
+      RegField.w(4, q_filter_r1)),
     0x3A -> Seq(
-      RegField(4, q_filter_r2),
-      RegField(4, q_filter_r3)),
+      RegField.w(4, q_filter_r2),
+      RegField.w(4, q_filter_r3)),
     0x3B -> Seq(
-      RegField(4, q_filter_r4),
-      RegField(4, q_filter_r5)),
+      RegField.w(4, q_filter_r4),
+      RegField.w(4, q_filter_r5)),
     0x3C -> Seq(
-      RegField(4, q_filter_r6),
-      RegField(4, q_filter_r7)),
+      RegField.w(4, q_filter_r6),
+      RegField.w(4, q_filter_r7)),
     0x3D -> Seq(
-      RegField(4, q_filter_r8),
-      RegField(4, q_filter_r9)),
-    0x3E -> Seq(RegField(1, i_DCO_useDCO)),
-    0x3F -> Seq(RegField(1, i_DCO_reset)),
-    0x40 -> Seq(RegField(8, i_DCO_gain)),
-    0x41 -> Seq(RegField(1, q_DCO_useDCO)),
-    0x42 -> Seq(RegField(1, q_DCO_reset)),
-    0x43 -> Seq(RegField(8, q_DCO_gain)),
-    0x44 -> Seq(RegField(6, dac_t0)),
-    0x45 -> Seq(RegField(6, dac_t1)),
-    0x46 -> Seq(RegField(6, dac_t2)),
-    0x47 -> Seq(RegField(6, dac_t3)),
-    0x48 -> Seq(RegField(1, enableDebug)), // Debug Configuration
-    0x49 -> Seq(RegField(10, mux_dbg_in)),
-    0x4B -> Seq(RegField(10, mux_dbg_out)),
-    0x4D -> Seq(RegField(5, enable_rx_i)), // Manual enable values
-    0x4E -> Seq(RegField(5, enable_rx_q)),
-    0x4F -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
-    0x50 -> Seq(RegField.w(32, lutCmd)) // LUT Programming
+      RegField.w(4, q_filter_r8),
+      RegField.w(4, q_filter_r9)),
+    0x3E -> Seq(RegField.w(1, i_DCO_useDCO)),
+    0x3F -> Seq(RegField.w(1, i_DCO_reset)),
+    0x40 -> Seq(RegField.w(8, i_DCO_gain)),
+    0x41 -> Seq(RegField.w(1, q_DCO_useDCO)),
+    0x42 -> Seq(RegField.w(1, q_DCO_reset)),
+    0x43 -> Seq(RegField.w(8, q_DCO_gain)),
+    0x44 -> Seq(RegField.w(6, dac_t0)),
+    0x45 -> Seq(RegField.w(6, dac_t1)),
+    0x46 -> Seq(RegField.w(6, dac_t2)),
+    0x47 -> Seq(RegField.w(6, dac_t3)),
+    0x48 -> Seq(RegField.w(1, enableDebug)), // Debug Configuration
+    0x49 -> Seq(RegField.w(10, mux_dbg_in)),
+    0x4B -> Seq(RegField.w(10, mux_dbg_out)),
+    0x4D -> Seq(RegField.w(5, enable_rx_i)), // Manual Enable Values
+    0x4E -> Seq(RegField.w(5, enable_rx_q)),
+    0x4F -> Seq(RegField.w(1, image_rejection_op)), // Image Rejection Configuration
+    0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
+    0x54 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
+    0x58 -> Seq(RegField.r(32, rxFinishMessage))
   )
 }
 
