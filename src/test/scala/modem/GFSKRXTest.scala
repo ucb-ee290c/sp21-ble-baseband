@@ -29,12 +29,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   })
   val gfskRX = Module(new GFSKRX(params)).io
 
-  val preambleDetected = RegInit(0.B)
-  def risingedge(x: Bool) = x && !RegNext(x)
-  when (risingedge(gfskRX.control.out.preambleDetected)) {
-    preambleDetected := 1.B
-  }
-
+  val preambleDetected = gfskRX.control.out.preambleDetected
   gfskRX.control.in.imageRejectionOp := 0.B
   gfskRX.control.in.enable := 1.B
   gfskRX.analog <> io.analog
@@ -123,7 +118,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
   def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
     val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
-    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency, FIR(bitstream(imageBits), gaussian_weights)))
+    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
   }
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
@@ -131,7 +126,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val numberOfBits = 25
+      val numberOfBits = 200
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
       val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
