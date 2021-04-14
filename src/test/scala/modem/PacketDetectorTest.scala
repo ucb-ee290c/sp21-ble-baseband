@@ -11,8 +11,7 @@ import scala.util.Random
 import scala.collection.immutable.Seq
 
 class PacketDetectorTest extends AnyFlatSpec with ChiselScalatestTester {
-  val packetPattern = Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => i%2 } }
-  it should "Perfectly Match Packet Preamble" in {
+  it should "Perfectly Match Packet Preamble with leading 0" in {
     test(new PreambleCorrelator()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.firstBit.poke(0.U)
       c.io.in.poke(0.U)
@@ -23,6 +22,18 @@ class PacketDetectorTest extends AnyFlatSpec with ChiselScalatestTester {
       assert(c.io.matches.peek().litValue() == 20 * 8)
     }
   }
+  it should "Perfectly Match Packet Preamble with leading 1" in {
+    test(new PreambleCorrelator()).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.firstBit.poke(1.U)
+      c.io.in.poke(0.U)
+      Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => if (i%2 == 0) 1 else 0 } }.foreach { e =>
+        c.clock.step()
+        c.io.in.poke(e.asUInt())
+      }
+      assert(c.io.matches.peek().litValue() == 20 * 8)
+    }
+  }
+  val packetPattern = Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => i%2 } }
   it should "Pass Fuzz Test" in {
     for (i <- 1 to 100) {
       val seq = Seq.tabulate(8){i => i}.flatMap{ i => Seq.tabulate(20){ _ => Random.nextInt(1) } }

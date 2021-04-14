@@ -17,7 +17,7 @@ import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
 import breeze.stats.distributions.Gaussian
-import breeze.plot._
+//import breeze.plot._
 
 import verif._
 
@@ -65,20 +65,23 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     filterForward(b, a, signal)
   }
 
-  var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
-  def whiten(b: Int): Int = {
-    val last = lfsr.last
-    lfsr = lfsr.indices.map { i =>
+  def whiten(bits: Iterable[Int]): List[Int] = {
+    var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
+    def whitener(b: Int): Int = {
+      val last = lfsr.last
+      lfsr = lfsr.indices.map { i =>
 
-      if (i == 0) {
-        lfsr.last
-      } else if (i == 4) {
-        lfsr.last ^ lfsr(3)
-      } else {
-        lfsr(i - 1)
+        if (i == 0) {
+          lfsr.last
+        } else if (i == 4) {
+          lfsr.last ^ lfsr(3)
+        } else {
+          lfsr(i - 1)
+        }
       }
+      last ^ b
     }
-    last ^ b
+    bits.toList.map{whitener(_)}
   }
 
   val gaussian_weights = Seq(1.66272941385205e-08, 1.31062698399579e-07, 8.95979722260093e-07, 5.31225368476001e-06, 2.73162439119005e-05, 0.000121821714511972, 0.000471183401324158, 0.00158058118651170, 0.00459838345240388, 0.0116025943557647, 0.0253902270288187, 0.0481880785252652, 0.0793184437320263, 0.113232294984428, 0.140193534368681, 0.150538370165906, 0.140193534368681, 0.113232294984428, 0.0793184437320263, 0.0481880785252652, 0.0253902270288187, 0.0116025943557647, 0.00459838345240388, 0.00158058118651170, 0.000471183401324158, 0.000121821714511972, 2.73162439119005e-05, 5.31225368476001e-06, 8.95979722260093e-07, 1.31062698399579e-07, 1.66272941385205e-08)
@@ -155,7 +158,6 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val noiseAmplitude = i.toDouble / 100
       val SNR = 1 / noiseAmplitude
       var BER = 2.0
-
       println(s"Testing SNR of ${SNR}:")
 
       test(new GFSKRXTestModule(BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
@@ -165,18 +167,17 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
         val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
 
         val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
-        val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
+        val bits = Seq(0,0,0,0,0,0) ++ preamble ++ whiten(packet) ++ Seq(0,0,0,0,0,0,0)
         val input = noisyTestWaveform(bits, noiseAmplitude = noiseAmplitude)
-        //val initialPhaseOffset = Random.nextInt(20)
+        val initialPhaseOffset = Random.nextInt(20)
         //c.clock.step(initialPhaseOffset) // random phase offset
 
         inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
         inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
         c.clock.step(bits.size * 20)
 
-        lfsr = Seq(1,0,0,0,0,0,0)
-        val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}
-        //println("Initial Phase Offset: ",initialPhaseOffset, "Received Data: ", retrieved, "Expected Data: ", packet)
+        val retrieved = whiten(outMonitor.monitoredTransactions.map{_.data.litValue.toInt})
+        println("Initial Phase Offset: ",initialPhaseOffset, "Received Data: ", retrieved, "Expected Data: ", packet)
         assert(retrieved.size > 0)
         BER = 1.0 - ((packet.zip(retrieved).count { case (observed, expected) => observed == expected }).toDouble / packet.length)
 
@@ -196,10 +197,10 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val inDriverQ = new DecoupledDriverMaster(c.clock, c.io.analog.q)
       val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
-      val numberOfBits = 200
+      val numberOfBits = 20
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
-      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ packet.map{whiten(_)} ++ Seq(0,0,0,0,0,0,0)
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ whiten(packet) ++ Seq(0,0,0,0,0,0,0)
       val input = testWaveform(bits)
       val initialPhaseOffset = Random.nextInt(20)
       c.clock.step(initialPhaseOffset) // random phase offset
@@ -207,8 +208,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
       c.clock.step(bits.size * 20)
 
-      lfsr = Seq(1,0,0,0,0,0,0)
-      val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}.map{whiten(_)}
+      val retrieved = whiten(outMonitor.monitoredTransactions.map{_.data.litValue.toInt})
       println("Initial Phase Offset: ",initialPhaseOffset, "Received Data: ", retrieved, "Expected Data: ", packet)
       assert(retrieved.size > 0 && packet.zip(retrieved).forall {p => p._1 == p._2})
     }
