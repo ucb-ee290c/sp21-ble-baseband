@@ -192,6 +192,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val errorMessage = Wire(new DecoupledIO(UInt(32.W)))
   val rxFinishMessage = Wire(new DecoupledIO(UInt(32.W)))
 
+  // TODO: Wire in connections to Controller
+  errorMessage.bits := DontCare
+  errorMessage.valid := false.B
+  rxFinishMessage.bits := DontCare
+  rxFinishMessage.valid := false.B
+
   io.tuning.trim.g0 := trim_g0
   io.tuning.trim.g1 := trim_g1
   io.tuning.trim.g2 := trim_g2
@@ -214,15 +220,15 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuningControl.i.AGC.control.gain := i_vgaAtten_gain.asFixedPoint(6.BP)
 
   io.tuning.i.filter.r0 := i_filter_r0
-  io.tuning.i.filter.r0 := i_filter_r1
-  io.tuning.i.filter.r0 := i_filter_r2
-  io.tuning.i.filter.r0 := i_filter_r3
-  io.tuning.i.filter.r0 := i_filter_r4
-  io.tuning.i.filter.r0 := i_filter_r5
-  io.tuning.i.filter.r0 := i_filter_r6
-  io.tuning.i.filter.r0 := i_filter_r7
-  io.tuning.i.filter.r0 := i_filter_r8
-  io.tuning.i.filter.r0 := i_filter_r9
+  io.tuning.i.filter.r1 := i_filter_r1
+  io.tuning.i.filter.r2 := i_filter_r2
+  io.tuning.i.filter.r3 := i_filter_r3
+  io.tuning.i.filter.r4 := i_filter_r4
+  io.tuning.i.filter.r5 := i_filter_r5
+  io.tuning.i.filter.r6 := i_filter_r6
+  io.tuning.i.filter.r7 := i_filter_r7
+  io.tuning.i.filter.r8 := i_filter_r8
+  io.tuning.i.filter.r9 := i_filter_r9
 
   io.tuning.q.vgaAtten := q_vgaAtten
   io.tuningControl.q.AGC.useAGC := q_vgaAtten_useAGC
@@ -232,15 +238,15 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuningControl.q.AGC.control.gain := q_vgaAtten_gain.asFixedPoint(6.BP)
 
   io.tuning.q.filter.r0 := q_filter_r0
-  io.tuning.q.filter.r0 := q_filter_r1
-  io.tuning.q.filter.r0 := q_filter_r2
-  io.tuning.q.filter.r0 := q_filter_r3
-  io.tuning.q.filter.r0 := q_filter_r4
-  io.tuning.q.filter.r0 := q_filter_r5
-  io.tuning.q.filter.r0 := q_filter_r6
-  io.tuning.q.filter.r0 := q_filter_r7
-  io.tuning.q.filter.r0 := q_filter_r8
-  io.tuning.q.filter.r0 := q_filter_r9
+  io.tuning.q.filter.r1 := q_filter_r1
+  io.tuning.q.filter.r2 := q_filter_r2
+  io.tuning.q.filter.r3 := q_filter_r3
+  io.tuning.q.filter.r4 := q_filter_r4
+  io.tuning.q.filter.r5 := q_filter_r5
+  io.tuning.q.filter.r6 := q_filter_r6
+  io.tuning.q.filter.r7 := q_filter_r7
+  io.tuning.q.filter.r8 := q_filter_r8
+  io.tuning.q.filter.r9 := q_filter_r9
 
   io.tuningControl.i.DCO.useDCO := i_DCO_useDCO
   io.tuningControl.i.DCO.control.reset := i_DCO_reset
@@ -347,13 +353,13 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x47 -> Seq(RegField.w(6, dac_t3)),
     0x48 -> Seq(RegField.w(1, enableDebug)), // Debug Configuration
     0x49 -> Seq(RegField.w(10, mux_dbg_in)),
-    0x4B -> Seq(RegField.w(10, mux_dbg_out)),
-    0x4D -> Seq(RegField.w(5, enable_rx_i)), // Manual Enable Values
-    0x4E -> Seq(RegField.w(5, enable_rx_q)),
-    0x4F -> Seq(RegField.w(1, image_rejection_op)), // Image Rejection Configuration
-    0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
-    0x54 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
-    0x58 -> Seq(RegField.r(32, rxFinishMessage))
+    0x4C -> Seq(RegField.w(10, mux_dbg_out)),
+    0x4E -> Seq(RegField.w(5, enable_rx_i)), // Manual enable values
+    0x4F -> Seq(RegField.w(5, enable_rx_q)),
+    0x50 -> Seq(RegField.w(1, image_rejection_op)), // Image Rejection Configuration
+    0x54 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
+    0x58 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
+    0x5C -> Seq(RegField.r(32, rxFinishMessage))
   )
 }
 

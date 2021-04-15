@@ -197,12 +197,13 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     }.map { case (iNoisy, qNoisy) =>
       (math.max(0, math.min(31, iNoisy.round)).toInt, math.max(0, math.min(31, qNoisy.round)).toInt)
     }
-
+    
     val f = Figure()
     val p = f.subplot(0)
     p += plot(Seq.tabulate(100)(i => i), cleanSignal.map { case (i, q) => i }.take(100))
     p += plot(Seq.tabulate(100)(i => i), noisySignal.map { case (i, q) => i }.take(100), colorcode = "r")
     f.saveas(s"SignalPlot${noiseAmplitude}.png")
+
     noisySignal
   }
 /*
@@ -211,7 +212,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     val preamble = Seq(1,0,1,0,1,0,1,0)
 
     val SNRvBER = Seq.tabulate(11)(i => {
-      val noiseAmplitude = i.toDouble / 10
+      val noiseAmplitude = i.toDouble / 100
       val SNR = 1 / noiseAmplitude
       var BER = 2.0
       println(s"Testing SNR of ${SNR}:")
