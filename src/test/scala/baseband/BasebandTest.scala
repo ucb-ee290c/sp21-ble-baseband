@@ -10,7 +10,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 import verif._
 import  ee290cdma._
-/*
+
 class BasebandLoopback(params: BLEBasebandModemParams = BLEBasebandModemParams(), beatBytes: Int) extends Module {
   val io = IO(new BasebandIO(params.paddrBits, beatBytes))
 
@@ -383,4 +383,4 @@ class BasebandTest extends AnyFlatSpec with ChiselScalatestTester {
       }
     }
   }
-}*/
+}

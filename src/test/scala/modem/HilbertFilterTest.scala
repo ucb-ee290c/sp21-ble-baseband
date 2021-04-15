@@ -11,8 +11,26 @@ import chiseltest.internal.{TreadleBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
 import breeze.signal.{designFilterFirwin, filterLP}
 import breeze.signal.support.CanFilterLPHP
+import chisel3.experimental.FixedPoint
+import chisel3.util.Decoupled
 
 import scala.math
+
+class RoundTowardsZeroTestModule extends Module {
+  val io = IO(new Bundle {
+    val in = Input(FixedPoint(3.W, 1.BP))
+    val out = Output(SInt(2.W))
+  })
+  io.out := Utility.roundTowardsZero(io.in)
+}
+
+class RoundTowardsZeroIncorrectTestModule extends Module {
+  val io = IO(new Bundle {
+    val in = Input(FixedPoint(3.W, 1.BP))
+    val out = Output(SInt(2.W))
+  })
+  io.out := ((io.in >> 1)(1, 0)).asSInt()
+}
 
 class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
 
@@ -71,9 +89,10 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_image.length) {
-        c.io.in.bits.i.poke(mock_input_I_image(i).asUInt())
-        c.io.in.bits.q.poke(mock_input_Q_image(i).asUInt())
-        c.io.in.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.i.bits.poke(mock_input_I_image(i).asUInt())
+        c.io.in.q.bits.poke(mock_input_Q_image(i).asUInt())
+        c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
         c.clock.step()
        if (c.io.out.valid.peek().litToBoolean)
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
@@ -89,9 +108,10 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_mixed.length) {
-        c.io.in.bits.i.poke(mock_input_I_mixed(i).asUInt())
-        c.io.in.bits.q.poke(mock_input_Q_mixed(i).asUInt())
-        c.io.in.valid.poke((i < mock_input_I_mixed.length).asBool())
+        c.io.in.i.bits.poke(mock_input_I_mixed(i).asUInt())
+        c.io.in.q.bits.poke(mock_input_Q_mixed(i).asUInt())
+        c.io.in.i.valid.poke((i < mock_input_I_mixed.length).asBool())
+        c.io.in.q.valid.poke((i < mock_input_I_mixed.length).asBool())
         c.clock.step()
        if (c.io.out.valid.peek().litToBoolean)
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
@@ -109,9 +129,10 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       var arr = Seq[BigInt]()
       var i = 0
       while (i < mock_input_I_rf.length) {
-        c.io.in.bits.i.poke(mock_input_I_rf(i).asUInt())
-        c.io.in.bits.q.poke(mock_input_Q_rf(i).asUInt())
-        c.io.in.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.i.bits.poke(mock_input_I_rf(i).asUInt())
+        c.io.in.q.bits.poke(mock_input_Q_rf(i).asUInt())
+        c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
+        c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
         c.clock.step()
        if (c.io.out.valid.peek().litToBoolean)
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
@@ -120,6 +141,27 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       print("RF ONLY:\n")
       print(arr)
       assert(arr.max - arr.min > mock_input_I_rf.max - mock_input_I_rf.min)
+    }
+  }
+
+  it should "Utility Round Towards Zero" in {
+    test(new RoundTowardsZeroTestModule).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.in.poke(FixedPoint.fromDouble(1.5, 3.W, 1.BP))
+      assert(c.io.out.peek().asSInt().litValue() == 1)
+
+      c.io.in.poke(FixedPoint.fromDouble(-1.5, 3.W, 1.BP))
+      assert(c.io.out.peek().asSInt().litValue() == -1)
+    }
+  }
+
+  it should "Normally Does NOT Round Towards Zero" in {
+    test(new RoundTowardsZeroIncorrectTestModule).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.in.poke(FixedPoint.fromDouble(1.5, 3.W, 1.BP))
+      assert(c.io.out.peek().asSInt().litValue() == 1)
+
+      c.io.in.poke(FixedPoint.fromDouble(-1.5, 3.W, 1.BP))
+      assert(c.io.out.peek().asSInt().litValue() != -1)
+      assert(c.io.out.peek().asSInt().litValue() == -2)
     }
   }
 
