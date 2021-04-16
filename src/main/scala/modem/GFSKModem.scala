@@ -196,8 +196,9 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
 
+  // TODO: SHOULD THIS LOOPBACK BE HERE
   val preModemLoopback = Module(new DecoupledLoopback(UInt(1.W)))
-  preModemLoopback.io.select := false.B // TODO: THIS SHOULD BE MMIO
+  preModemLoopback.io.select := false.B // TODO: THIS SHOULD BE MMIO??
   preModemLoopback.io.left.in <> txQueue
   tx.io.digital.in <> preModemLoopback.io.left.out
   preModemLoopback.io.right.in <> rx.io.digital.out
@@ -205,28 +206,29 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   /* TODO: Does the ADC Latch the data? */
   val i = RegNext(io.analog.rx.i.data) // TODO: Validate these DFF are connected to the ADC post-elaboration
   val q = RegNext(io.analog.rx.q.data)
+  val valid = RegNext(io.control.rx.in.enable)
 
   val rxQueue = Queue(rx.io.digital.out, params.modemQueueDepth)//Queue(preModemLoopback.io.right.out, params.modemQueueDepth)
   preModemLoopback.io.right.out.ready := 1.B
   io.digital.rx <> rxQueue
 
-  rx.io.analog.i.valid := 1.B // TODO: is this okay?
-  rx.io.analog.i.bits := io.analog.rx.i.data
+  rx.io.analog.i.valid := valid
+  rx.io.analog.i.bits := i
 
-  rx.io.analog.q.valid := 1.B // TODO: is this okay?
-  rx.io.analog.q.bits := io.analog.rx.q.data
+  rx.io.analog.q.valid := valid
+  rx.io.analog.q.bits := q
 
   // AGC
   val iAGC = Module(new AGC(params))
   iAGC.io.control := io.tuning.control.i.AGC.control
-  iAGC.io.adcIn.valid := 1.B // TODO: is this okay?
+  iAGC.io.adcIn.valid := valid
   iAGC.io.adcIn.bits := i
 
   io.tuning.data.i.vgaAtten := modemLUTs.AGCI(iAGC.io.vgaLUTIndex)
 
   val qAGC = Module(new AGC(params))
   qAGC.io.control := io.tuning.control.q.AGC.control
-  qAGC.io.adcIn.valid := 1.B // TODO: is this okay?
+  qAGC.io.adcIn.valid := valid
   qAGC.io.adcIn.bits := q
 
   io.tuning.data.q.vgaAtten := modemLUTs.AGCQ(qAGC.io.vgaLUTIndex)
@@ -234,14 +236,14 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   // DCO
   val idcoFront = Module(new DCO(params))
   idcoFront.io.control := io.tuning.control.i.DCO.control
-  idcoFront.io.adcIn.valid := 1.B // TODO: is this okay?
+  idcoFront.io.adcIn.valid := valid
   idcoFront.io.adcIn.bits := i
 
   io.tuning.data.dac.t0 := modemLUTs.DCOIFRONT(idcoFront.io.dcoLUTIndex)
 
   val qdcoFront = Module(new DCO(params))
   qdcoFront.io.control := io.tuning.control.q.DCO.control
-  qdcoFront.io.adcIn.valid := 1.B // TODO: is this okay?
+  qdcoFront.io.adcIn.valid := valid
   qdcoFront.io.adcIn.bits := q
 
   io.tuning.data.dac.t2 := modemLUTs.DCOQFRONT(qdcoFront.io.dcoLUTIndex)

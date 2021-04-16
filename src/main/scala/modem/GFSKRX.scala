@@ -55,7 +55,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   val cdr = Module(new FPSCDR)
   val beginSampling = Wire(Bool())
   guess := demod.io.guess.bits
-  demod.io.guess.ready := io.control.in.enable
+  demod.io.guess.ready := io.control.in.enable && io.digital.out.ready
 
   val accumulator = Wire(SInt(8.W)) // TODO: THIS WIDTH IS VERY IMPORTANT, THIS VALUE CANNOT OVERFLOW
   accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(8.W))
