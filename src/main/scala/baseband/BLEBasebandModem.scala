@@ -18,9 +18,10 @@ case class BLEBasebandModemParams (
   adcBits: Int = 8,
   adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
-  modemQueueDepth: Int = 128,
+  modemQueueDepth: Int = 256,
   cyclesPerSymbol: Int = 10,
-  agcMaxWindow: Int = 5)
+  agcMaxWindow: Int = 5,
+  interruptMessageQueueDepth: Int = 1)
 
 case object BLEBasebandModemKey extends Field[Option[BLEBasebandModemParams]](None)
 
@@ -55,8 +56,11 @@ class BLEBasebandModemInterrupts extends Bundle {
   val rxStart = Bool()
   val rxFinish = Bool()
   val txFinish = Bool()
-  val timer1 = Bool()
-  val timer2 = Bool()
+}
+
+class BLEBasebandModemMessagesIO extends Bundle {
+  val errorMessage = Decoupled(UInt(32.W))
+  val rxFinishMessage = Decoupled(UInt(32.W))
 }
 
 class BLEBasebandModemBackendIO extends Bundle {
@@ -64,6 +68,7 @@ class BLEBasebandModemBackendIO extends Bundle {
   val lutCmd = Decoupled(new GFSKModemLUTCommand)
   val status = Input(new BLEBasebandModemStatus)
   val interrupt = Input(new BLEBasebandModemInterrupts)
+  val messages = Flipped(new BLEBasebandModemMessagesIO)
 }
 
 trait BLEBasebandModemFrontendBundle extends Bundle {
@@ -264,6 +269,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuningControl.debug.enabled := enableDebug
   io.tuning.mux.dbg.in := mux_dbg_in
   io.tuning.mux.dbg.out := mux_dbg_out
+  io.tuning.enable.debug := enableDebug
   io.tuning.enable.rx.i := enable_rx_i
   io.tuning.enable.rx.q := enable_rx_q
 
@@ -274,8 +280,6 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   interrupts(1) := io.back.interrupt.rxStart
   interrupts(2) := io.back.interrupt.rxFinish
   interrupts(3) := io.back.interrupt.txFinish
-  interrupts(4) := io.back.interrupt.timer1
-  interrupts(5) := io.back.interrupt.timer2
 
   regmap(
     0x00 -> Seq(RegField.w(32, inst)), // Command start
@@ -294,79 +298,79 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x22 -> Seq(RegField(8, trim_g6)),
     0x23 -> Seq(RegField(8, trim_g7)),
     0x24 -> Seq( // Mixer
-      RegField.w(4, mixer_r0),
-      RegField.w(4, mixer_r1)),
+      RegField(4, mixer_r0),
+      RegField(4, mixer_r1)),
     0x25 -> Seq(
-      RegField.w(4, mixer_r2),
-      RegField.w(4, mixer_r3)),
-    0x26 -> Seq(RegField.w(10, i_vgaAtten)), // I VGA
-    0x28 -> Seq(RegField.w(1, i_vgaAtten_reset)),
-    0x29 -> Seq(RegField.w(1, i_vgaAtten_useAGC)),
-    0x2A -> Seq(RegField.w(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
-    0x2B -> Seq(RegField.w(params.adcBits, i_vgaAtten_idealPeakToPeak)),
-    0x2C -> Seq(RegField.w(8, i_vgaAtten_gain)),
+      RegField(4, mixer_r2),
+      RegField(4, mixer_r3)),
+    0x26 -> Seq(RegField(10, i_vgaAtten)), // I VGA
+    0x28 -> Seq(RegField(1, i_vgaAtten_reset)),
+    0x29 -> Seq(RegField(1, i_vgaAtten_useAGC)),
+    0x2A -> Seq(RegField(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
+    0x2B -> Seq(RegField(params.adcBits, i_vgaAtten_idealPeakToPeak)),
+    0x2C -> Seq(RegField(8, i_vgaAtten_gain)),
     0x2D -> Seq( // I Filter
-      RegField.w(4, i_filter_r0),
-      RegField.w(4, i_filter_r1)),
+      RegField(4, i_filter_r0),
+      RegField(4, i_filter_r1)),
     0x2E -> Seq(
-      RegField.w(4, i_filter_r2),
-      RegField.w(4, i_filter_r3)),
+      RegField(4, i_filter_r2),
+      RegField(4, i_filter_r3)),
     0x2F -> Seq(
-      RegField.w(4, i_filter_r4),
-      RegField.w(4, i_filter_r5)),
+      RegField(4, i_filter_r4),
+      RegField(4, i_filter_r5)),
     0x30 -> Seq(
-      RegField.w(4, i_filter_r6),
-      RegField.w(4, i_filter_r7)),
+      RegField(4, i_filter_r6),
+      RegField(4, i_filter_r7)),
     0x31 -> Seq(
-      RegField.w(4, i_filter_r8),
-      RegField.w(4, i_filter_r9)),
-    0x32 -> Seq(RegField.w(10, q_vgaAtten)), // Q VGA
-    0x34 -> Seq(RegField.w(1, q_vgaAtten_reset)),
-    0x35 -> Seq(RegField.w(1, q_vgaAtten_useAGC)),
-    0x36 -> Seq(RegField.w(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
-    0x37 -> Seq(RegField.w(params.adcBits, q_vgaAtten_idealPeakToPeak)),
-    0x38 -> Seq(RegField.w(8, q_vgaAtten_gain)),
+      RegField(4, i_filter_r8),
+      RegField(4, i_filter_r9)),
+    0x32 -> Seq(RegField(10, q_vgaAtten)), // Q VGA
+    0x34 -> Seq(RegField(1, q_vgaAtten_reset)),
+    0x35 -> Seq(RegField(1, q_vgaAtten_useAGC)),
+    0x36 -> Seq(RegField(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
+    0x37 -> Seq(RegField(params.adcBits, q_vgaAtten_idealPeakToPeak)),
+    0x38 -> Seq(RegField(8, q_vgaAtten_gain)),
     0x39 -> Seq( // Q Filter
-      RegField.w(4, q_filter_r0),
-      RegField.w(4, q_filter_r1)),
+      RegField(4, q_filter_r0),
+      RegField(4, q_filter_r1)),
     0x3A -> Seq(
-      RegField.w(4, q_filter_r2),
-      RegField.w(4, q_filter_r3)),
+      RegField(4, q_filter_r2),
+      RegField(4, q_filter_r3)),
     0x3B -> Seq(
-      RegField.w(4, q_filter_r4),
-      RegField.w(4, q_filter_r5)),
+      RegField(4, q_filter_r4),
+      RegField(4, q_filter_r5)),
     0x3C -> Seq(
-      RegField.w(4, q_filter_r6),
-      RegField.w(4, q_filter_r7)),
+      RegField(4, q_filter_r6),
+      RegField(4, q_filter_r7)),
     0x3D -> Seq(
-      RegField.w(4, q_filter_r8),
-      RegField.w(4, q_filter_r9)),
-    0x3E -> Seq(RegField.w(1, i_DCO_useDCO)),
-    0x3F -> Seq(RegField.w(1, i_DCO_reset)),
-    0x40 -> Seq(RegField.w(8, i_DCO_gain)),
-    0x41 -> Seq(RegField.w(1, q_DCO_useDCO)),
-    0x42 -> Seq(RegField.w(1, q_DCO_reset)),
-    0x43 -> Seq(RegField.w(8, q_DCO_gain)),
-    0x44 -> Seq(RegField.w(6, dac_t0)),
-    0x45 -> Seq(RegField.w(6, dac_t1)),
-    0x46 -> Seq(RegField.w(6, dac_t2)),
-    0x47 -> Seq(RegField.w(6, dac_t3)),
-    0x48 -> Seq(RegField.w(1, enableDebug)), // Debug Configuration
-    0x49 -> Seq(RegField.w(10, mux_dbg_in)),
-    0x4C -> Seq(RegField.w(10, mux_dbg_out)),
-    0x4E -> Seq(RegField.w(5, enable_rx_i)), // Manual enable values
-    0x4F -> Seq(RegField.w(5, enable_rx_q)),
-    0x50 -> Seq(RegField.w(1, image_rejection_op)), // Image Rejection Configuration
-    0x54 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
-    0x58 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
-    0x5C -> Seq(RegField.r(32, rxFinishMessage))
+      RegField(4, q_filter_r8),
+      RegField(4, q_filter_r9)),
+    0x3E -> Seq(RegField(1, i_DCO_useDCO)),
+    0x3F -> Seq(RegField(1, i_DCO_reset)),
+    0x40 -> Seq(RegField(8, i_DCO_gain)),
+    0x41 -> Seq(RegField(1, q_DCO_useDCO)),
+    0x42 -> Seq(RegField(1, q_DCO_reset)),
+    0x43 -> Seq(RegField(8, q_DCO_gain)),
+    0x44 -> Seq(RegField(6, dac_t0)),
+    0x45 -> Seq(RegField(6, dac_t1)),
+    0x46 -> Seq(RegField(6, dac_t2)),
+    0x47 -> Seq(RegField(6, dac_t3)),
+    0x48 -> Seq(RegField(1, enableDebug)), // Debug Configuration
+    0x49 -> Seq(RegField(10, mux_dbg_in)),
+    0x4B -> Seq(RegField(10, mux_dbg_out)),
+    0x4D -> Seq(RegField(5, enable_rx_i)), // Manual enable values
+    0x4E -> Seq(RegField(5, enable_rx_q)),
+    0x4F -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
+    0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
+    0x54 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
+    0x58 -> Seq(RegField.r(32, rxFinishMessage))
   )
 }
 
 class BLEBasebandModemFrontend(params: BLEBasebandModemParams, beatBytes: Int)(implicit p: Parameters)
   extends TLRegisterRouter(
     params.address, "baseband", Seq("ucbbar, riscv"),
-    beatBytes = beatBytes, interrupts = 6)( // TODO: Interrupts and compatible list
+    beatBytes = beatBytes, interrupts = 4)( // TODO: Interrupts and compatible list
       new TLRegBundle(params, _) with BLEBasebandModemFrontendBundle)(
       new TLRegModule(params, _, _) with BLEBasebandModemFrontendModule)
 
@@ -393,39 +397,22 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   // Incoming Command Queue
   val cmdQueue = Queue(basebandFrontend.io.back.cmd, params.cmdQueueDepth)
 
-  // Controller
-  val controller = Module(new Controller(params, beatBytes))
-  controller.io.cmd <> cmdQueue
-  controller.io.dma.readReq <> dma.io.read.req
-  controller.io.dma.readResp <> dma.io.read.resp
-
-  // Baseband
-  val baseband = Module(new Baseband(params, beatBytes))
-  baseband.io.control <> controller.io.basebandControl
-  baseband.io.constants := controller.io.constants
-  baseband.io.dma.readData <> dma.io.read.queue
-  baseband.io.dma.writeReq <> dma.io.write.req
-
-  // Modem
-  val modem = Module(new GFSKModem(params))
-  modem.io.lutCmd <> basebandFrontend.io.back.lutCmd
-  modem.io.analog.rx <> io.data.rx
-  modem.io.constants := controller.io.constants
-  modem.io.control <> controller.io.modemControl
-  modem.io.digital.tx <> baseband.io.modem.digital.tx
-  modem.io.digital.rx <> baseband.io.modem.digital.rx
-  modem.io.tuning.control := basebandFrontend.io.tuningControl
-  modem.io.analog.tx.pllReady := io.data.tx.pllReady
-
-  baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
+  // Baseband Modem and Controller
+  val bmc = Module(new BMC(params, beatBytes))
+  bmc.io.analog.data.rx <> io.data.rx
+  bmc.io.cmd <> cmdQueue
+  bmc.io.dma.readReq <> dma.io.read.req
+  bmc.io.dma.readResp <> dma.io.read.resp
+  bmc.io.dma.readData <> dma.io.read.queue
+  bmc.io.dma.writeReq <> dma.io.write.req
+  bmc.io.lutCmd <> basebandFrontend.io.back.lutCmd
+  bmc.io.tuning.control := basebandFrontend.io.tuningControl
 
   // Interrupts
-  basebandFrontend.io.back.interrupt.error := controller.io.interrupt.error // TODO: Add more blocks with errors here
-  basebandFrontend.io.back.interrupt.rxStart := controller.io.interrupt.rxStart
-  basebandFrontend.io.back.interrupt.rxFinish := controller.io.interrupt.rxFinish
-  basebandFrontend.io.back.interrupt.txFinish := controller.io.interrupt.txFinish
-  basebandFrontend.io.back.interrupt.timer1 := DontCare
-  basebandFrontend.io.back.interrupt.timer2 := DontCare
+  basebandFrontend.io.back.interrupt.error := bmc.io.interrupt.error // TODO: Add more blocks with errors here
+  basebandFrontend.io.back.interrupt.rxStart := bmc.io.interrupt.rxStart
+  basebandFrontend.io.back.interrupt.rxFinish := bmc.io.interrupt.rxFinish
+  basebandFrontend.io.back.interrupt.txFinish := bmc.io.interrupt.txFinish
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim
@@ -433,20 +420,20 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   io.tuning.i.filter := basebandFrontend.io.tuning.i.filter
   io.tuning.q.filter := basebandFrontend.io.tuning.q.filter
 
-  io.tuning.dac.t0 := Mux(basebandFrontend.io.tuningControl.i.DCO.useDCO, modem.io.tuning.data.dac.t0, basebandFrontend.io.tuning.dac.t0)
+  io.tuning.dac.t0 := Mux(basebandFrontend.io.tuningControl.i.DCO.useDCO, bmc.io.tuning.data.dac.t0, basebandFrontend.io.tuning.dac.t0)
   io.tuning.dac.t1 := basebandFrontend.io.tuning.dac.t1
-  io.tuning.dac.t2 := Mux(basebandFrontend.io.tuningControl.q.DCO.useDCO, modem.io.tuning.data.dac.t2, basebandFrontend.io.tuning.dac.t2)
+  io.tuning.dac.t2 := Mux(basebandFrontend.io.tuningControl.q.DCO.useDCO, bmc.io.tuning.data.dac.t2, basebandFrontend.io.tuning.dac.t2)
   io.tuning.dac.t3 := basebandFrontend.io.tuning.dac.t3
 
-  io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.AGC.useAGC, modem.io.tuning.data.i.vgaAtten, basebandFrontend.io.tuning.i.vgaAtten)
-  io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.AGC.useAGC, modem.io.tuning.data.q.vgaAtten, basebandFrontend.io.tuning.q.vgaAtten)
+  io.tuning.i.vgaAtten := Mux(basebandFrontend.io.tuningControl.i.AGC.useAGC, bmc.io.tuning.data.i.vgaAtten, basebandFrontend.io.tuning.i.vgaAtten)
+  io.tuning.q.vgaAtten := Mux(basebandFrontend.io.tuningControl.q.AGC.useAGC, bmc.io.tuning.data.q.vgaAtten, basebandFrontend.io.tuning.q.vgaAtten)
 
-  io.tuning.enable.rx.i := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.i, controller.io.analog.enable.rx)
-  io.tuning.enable.rx.q := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.q, controller.io.analog.enable.rx)
+  io.tuning.enable.rx.i := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.i, bmc.io.analog.enable.rx)
+  io.tuning.enable.rx.q := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.q, bmc.io.analog.enable.rx)
 
-  io.data.pllD := controller.io.analog.pllD
-  io.data.loCT := modem.io.analog.loCT
-  io.data.tx.loFSK := modem.io.analog.tx.loFSK
+  io.data.pllD := bmc.io.analog.data.pllD
+  io.data.loCT := bmc.io.analog.data.loCT
+  io.data.tx.loFSK := bmc.io.analog.data.tx.loFSK
 
-  io.offChipMode := controller.io.analog.offChipMode
+  io.offChipMode := bmc.io.analog.offChipMode
 }
