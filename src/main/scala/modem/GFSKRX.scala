@@ -42,8 +42,8 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
 
-  val demod = Module(new GFSKDemodulation(params))
-  demod.io.signal.bits := imageRejection.io.out.bits(6,1).asSInt()
+  val demod = Module(new GFSKDemodulation(params, imageRejection.io.out.bits.getWidth))
+  demod.io.signal.bits := imageRejection.io.out.bits
   demod.io.signal.valid := imageRejection.io.out.valid
   imageRejection.io.out.ready := demod.io.signal.ready
 

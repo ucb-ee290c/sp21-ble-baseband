@@ -1,0 +1,117 @@
+package modem
+
+import breeze.plot.{Figure, plot}
+import breeze.stats.distributions.Gaussian
+import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
+
+import scala.collection.immutable.Seq
+import scala.collection.mutable.ListBuffer
+import scala.util.Random
+
+object TestUtility {
+  val MHz = 1000000
+
+  val channel_index = 0
+  val F_RF = (2402 + 2 * channel_index) * MHz
+  val F_IF = 2 * MHz
+  val F_LO = F_RF - F_IF
+  val F_IM = F_LO - F_IF
+  val analog_F_sample = (F_LO * 2 + F_IF + 0.25 * MHz) * 2
+  val time_interval = 0.0000001
+  val symbol_time = 0.000001
+  val digital_clock_F = 20 * MHz
+
+  def analogLowpass(signal: Seq[Double], Fs: Double, Fc: Double): Seq[Double] = {
+    val (b, a) = new TransferFunctionBuilder()
+      .butterworthApproximation(5)
+      .digitalize(Fs)
+      .transformToLowPass(Fc) // Low-pass filter with cutoff frequency 3.5Hz
+      .coefficients
+    filterForward(b, a, signal)
+  }
+
+  def whiten(bits: Iterable[Int]): List[Int] = {
+    var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
+    def whitener(b: Int): Int = {
+      val last = lfsr.last
+      lfsr = lfsr.indices.map { i =>
+
+        if (i == 0) {
+          lfsr.last
+        } else if (i == 4) {
+          lfsr.last ^ lfsr(3)
+        } else {
+          lfsr(i - 1)
+        }
+      }
+      last ^ b
+    }
+    bits.toList.map{whitener(_)}
+  }
+
+  val gaussian_weights = Seq(1.66272941385205e-08, 1.31062698399579e-07, 8.95979722260093e-07, 5.31225368476001e-06, 2.73162439119005e-05, 0.000121821714511972, 0.000471183401324158, 0.00158058118651170, 0.00459838345240388, 0.0116025943557647, 0.0253902270288187, 0.0481880785252652, 0.0793184437320263, 0.113232294984428, 0.140193534368681, 0.150538370165906, 0.140193534368681, 0.113232294984428, 0.0793184437320263, 0.0481880785252652, 0.0253902270288187, 0.0116025943557647, 0.00459838345240388, 0.00158058118651170, 0.000471183401324158, 0.000121821714511972, 2.73162439119005e-05, 5.31225368476001e-06, 8.95979722260093e-07, 1.31062698399579e-07, 1.66272941385205e-08)
+  def bitstream(in: Seq[Int]): Seq[Double] = {
+    in.flatMap{b: Int => Seq.tabulate(10){i: Int => (if (b == 0) -1.0 else 1.0)}}
+  }
+
+  def FIR(in: Seq[Double], coeff: Seq[Double]): Seq[Double] = {
+    var samples = ListBuffer[Double]()
+    return in.map { s: Double =>
+      samples.prepend(s)
+      samples.zip(coeff).map {g: (Double, Double) => g._1 * g._2}.sum
+    }
+  }
+
+  def RFtoIF(in: Seq[Double], Fc: Double, imageIn: Seq[Double] = Seq(), imageFc: Double = F_IM): Seq[(Double, Double)] = {
+    val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length / 10)).toInt)(_ * (1/(analog_F_sample)))
+    val frequencies = timeSteps.map {t => Fc + in((t / (symbol_time / 10)).floor.toInt) * 0.25 * MHz }
+    val phases = frequencies.map{var s: Double = 0.0; d => {s += d; 2 * math.Pi * s * (1/analog_F_sample)}}
+    val rf = phases.map {math.cos(_)}
+    var signal = rf
+    if (imageIn.size > 0) {
+      val image_frequencies = timeSteps.map {t => imageFc + imageIn((t / (symbol_time / 10)).floor.toInt) * 0.25 * MHz }
+      val image_phases = image_frequencies.map{var s: Double = math.Pi / 4; d => {s += d; 2 * math.Pi * s * (1/analog_F_sample)}}
+      val image = image_phases.map {v => math.cos(v)}
+      signal = rf.zip(image).map {p => p._1 + p._2}
+    }
+
+    val I = timeSteps.indices.map {i => signal(i) * math.cos(2 * math.Pi * F_LO * timeSteps(i))}
+    val Q = timeSteps.indices.map {i => signal(i) * math.sin(2 * math.Pi * F_LO * timeSteps(i))}
+    return analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz)
+  }
+  def analogToDigital(in: (Seq[(Double, Double)])): (Seq[(Int, Int)]) = {
+    val sampled = in.zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e}
+    val maxI = sampled.map{_._1}.max
+    val maxQ = sampled.map{_._2}.max
+    val minI = sampled.map{_._1}.min
+    val minQ = sampled.map{_._2}.min
+    return sampled.map{s: (Double, Double) => (((s._1 - minI) / (maxI - minI) * 31).toInt, ((s._2 - minQ) / (maxQ - minQ) * 31).toInt)}
+  }
+
+  def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
+    val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
+    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+  }
+
+  def noisyTestWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, noiseAmplitude: Double = 1.0): (Seq[(Int, Int)]) = {
+    val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
+    val cleanSignal = analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+
+    val noiseGen = Gaussian(0, 31.toDouble/6) // Gaussian with SD such that most data is between +/- 15.5
+    val noise = noiseGen.sample(cleanSignal.length).zip(noiseGen.sample(cleanSignal.length))
+
+    val noisySignal = cleanSignal.zip(noise).map { case ((i, q), (iNoise, qNoise)) =>
+      (i + noiseAmplitude * iNoise, q + noiseAmplitude * qNoise)
+    }.map { case (iNoisy, qNoisy) =>
+      (math.max(0, math.min(31, iNoisy.round)).toInt, math.max(0, math.min(31, qNoisy.round)).toInt)
+    }
+
+    val f = Figure()
+    val p = f.subplot(0)
+    p += plot(Seq.tabulate(100)(i => i), cleanSignal.map { case (i, q) => i }.take(100))
+    p += plot(Seq.tabulate(100)(i => i), noisySignal.map { case (i, q) => i }.take(100), colorcode = "r")
+    f.saveas(s"SignalPlot${noiseAmplitude}.png")
+
+    noisySignal
+  }
+}

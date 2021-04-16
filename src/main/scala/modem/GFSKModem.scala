@@ -19,11 +19,9 @@ class AnalogTXIO extends Bundle {
 class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
   val i = new Bundle {
     val data = Input(UInt(params.adcBits.W))
-    val valid = Input(Bool())
   }
   val q = new Bundle {
     val data = Input(UInt(params.adcBits.W))
-    val valid = Input(Bool())
   }
 }
 
@@ -193,71 +191,58 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   tx.io.control <> io.control.tx
 
   val rx = Module(new GFSKRX(params))
-  rx.io.control.in.imageRejectionOp := io.tuning.control.imageRejectionOp
-  rx.io.control.in.enable := io.control.rx.in.enable
-  io.control.rx.out.preambleDetected := rx.io.control.out.preambleDetected
+  rx.io.control <> io.control.rx
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
 
   val preModemLoopback = Module(new DecoupledLoopback(UInt(1.W)))
-  preModemLoopback.io.select := true.B
+  preModemLoopback.io.select := false.B // TODO: THIS SHOULD BE MMIO
   preModemLoopback.io.left.in <> txQueue
   tx.io.digital.in <> preModemLoopback.io.left.out
   preModemLoopback.io.right.in <> rx.io.digital.out
 
-  val rxQueue = Queue(preModemLoopback.io.right.out, params.modemQueueDepth)
+  /* TODO: Does the ADC Latch the data? */
+  val i = RegNext(io.analog.rx.i.data) // TODO: Validate these DFF are connected to the ADC post-elaboration
+  val q = RegNext(io.analog.rx.q.data)
+
+  val rxQueue = Queue(rx.io.digital.out, params.modemQueueDepth)//Queue(preModemLoopback.io.right.out, params.modemQueueDepth)
+  preModemLoopback.io.right.out.ready := 1.B
   io.digital.rx <> rxQueue
 
-  val iQueue = Module(new AsyncQueue(UInt(params.adcBits.W), AsyncQueueParams(depth = params.adcQueueDepth)))
-  iQueue.io.enq_clock := io.analog.rx.i.valid.asClock()
-  iQueue.io.enq_reset := reset.asBool()
-  iQueue.io.deq_clock := clock
-  iQueue.io.deq_reset := reset.asBool()
+  rx.io.analog.i.valid := 1.B // TODO: is this okay?
+  rx.io.analog.i.bits := io.analog.rx.i.data
 
-  // TODO: Refactor RX incoming to be ready valid on I and Q bits
-
-  val qQueue = Module(new AsyncQueue(UInt(params.adcBits.W), AsyncQueueParams(depth = params.adcQueueDepth)))
-  qQueue.io.enq_clock := io.analog.rx.q.valid.asClock()
-  qQueue.io.enq_reset := reset.asBool()
-  qQueue.io.deq_clock := clock
-  qQueue.io.deq_reset := reset.asBool()
-
-  iQueue.io.enq.bits := io.analog.rx.i.data
-  iQueue.io.enq.valid := true.B // TODO: Change this to be based on the modem state = RX
-  rx.io.analog.i <> iQueue.io.deq
-
-  qQueue.io.enq.bits := io.analog.rx.q.data
-  qQueue.io.enq.valid := true.B // TODO: Change this to be based on the modem state = RX
-  rx.io.analog.q <> qQueue.io.deq
+  rx.io.analog.q.valid := 1.B // TODO: is this okay?
+  rx.io.analog.q.bits := io.analog.rx.q.data
 
   // AGC
   val iAGC = Module(new AGC(params))
   iAGC.io.control := io.tuning.control.i.AGC.control
-  iAGC.io.adcIn.valid := iQueue.io.deq.valid
-  iAGC.io.adcIn.bits := iQueue.io.deq.bits
+  iAGC.io.adcIn.valid := 1.B // TODO: is this okay?
+  iAGC.io.adcIn.bits := i
 
   io.tuning.data.i.vgaAtten := modemLUTs.AGCI(iAGC.io.vgaLUTIndex)
 
   val qAGC = Module(new AGC(params))
   qAGC.io.control := io.tuning.control.q.AGC.control
-  qAGC.io.adcIn.valid := iQueue.io.deq.valid
-  qAGC.io.adcIn.bits := iQueue.io.deq.bits
+  qAGC.io.adcIn.valid := 1.B // TODO: is this okay?
+  qAGC.io.adcIn.bits := q
 
   io.tuning.data.q.vgaAtten := modemLUTs.AGCQ(qAGC.io.vgaLUTIndex)
 
   // DCO
   val idcoFront = Module(new DCO(params))
   idcoFront.io.control := io.tuning.control.i.DCO.control
-  idcoFront.io.adcIn.valid := iQueue.io.deq.valid
-  idcoFront.io.adcIn.bits := iQueue.io.deq.bits
+  idcoFront.io.adcIn.valid := 1.B // TODO: is this okay?
+  idcoFront.io.adcIn.bits := i
 
   io.tuning.data.dac.t0 := modemLUTs.DCOIFRONT(idcoFront.io.dcoLUTIndex)
 
   val qdcoFront = Module(new DCO(params))
   qdcoFront.io.control := io.tuning.control.q.DCO.control
-  qdcoFront.io.adcIn.valid := qQueue.io.deq.valid
-  qdcoFront.io.adcIn.bits := qQueue.io.deq.bits
+  qdcoFront.io.adcIn.valid := 1.B // TODO: is this okay?
+  qdcoFront.io.adcIn.bits := q
 
   io.tuning.data.dac.t2 := modemLUTs.DCOQFRONT(qdcoFront.io.dcoLUTIndex)
 
