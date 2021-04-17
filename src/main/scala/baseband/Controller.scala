@@ -63,7 +63,7 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 
   // TX IO
   io.modemTXControl.in.valid := modemTXReqValid
-  io.modemTXControl.in.bits.totalBytes := cmd.totalBytes - 2.U
+  io.modemTXControl.in.bits.totalBytes := cmd.totalBytes
 
   // DMA IO
   io.dma.readReq.valid := dmaReqValid
