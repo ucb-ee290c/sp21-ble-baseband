@@ -355,12 +355,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x45 -> Seq(RegField(6, dac_t1)),
     0x46 -> Seq(RegField(6, dac_t2)),
     0x47 -> Seq(RegField(6, dac_t3)),
-    0x48 -> Seq(RegField(1, enableDebug)), // Debug Configuration
-    0x49 -> Seq(RegField(10, mux_dbg_in)),
-    0x4B -> Seq(RegField(10, mux_dbg_out)),
-    0x4D -> Seq(RegField(5, enable_rx_i)), // Manual enable values
-    0x4E -> Seq(RegField(5, enable_rx_q)),
-    0x4F -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
+    0x48 -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
+    0x49 -> Seq(RegField(1, enableDebug)), // Debug Configuration
+    0x4A -> Seq(RegField(10, mux_dbg_in)),
+    0x4C -> Seq(RegField(10, mux_dbg_out)),
+    0x4E -> Seq(RegField(5, enable_rx_i)), // Manual enable values
+    0x4F -> Seq(RegField(5, enable_rx_q)),
     0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
     0x54 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
     0x58 -> Seq(RegField.r(32, rxFinishMessage))
