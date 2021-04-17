@@ -215,6 +215,8 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   rx.io.analog.i.valid := valid
   rx.io.analog.i.bits := i
 
+
+
   rx.io.analog.q.valid := valid
   rx.io.analog.q.bits := q
 
