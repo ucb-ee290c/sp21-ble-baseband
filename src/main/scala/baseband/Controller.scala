@@ -63,7 +63,7 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 
   // TX IO
   io.modemTXControl.in.valid := modemTXReqValid
-  io.modemTXControl.in.bits.totalBytes := cmd.totalBytes - 2.U
+  io.modemTXControl.in.bits.totalBytes := cmd.totalBytes
 
   // DMA IO
   io.dma.readReq.valid := dmaReqValid
@@ -395,7 +395,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   io.basebandControl.loopback := loopbackMask(1,0).asBools()
 
   // Analog IO
-  io.analog.pllD := 1200.U + constants.channelIndex + (state === s_tx).asUInt()
+  io.analog.pllD := 176.U + constants.channelIndex + (state === s_tx).asUInt() // TODO: Verify
   io.analog.enable.rx := Mux(state === s_rx | state === s_debug, (scala.math.pow(2, io.analog.enable.rx.getWidth) - 1).toInt.asUInt, 0.U)
   io.analog.offChipMode.rx := state === s_rx
   io.analog.offChipMode.tx := state === s_tx

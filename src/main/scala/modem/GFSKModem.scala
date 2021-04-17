@@ -13,10 +13,9 @@ class GFSKModemDigitalIO extends Bundle {
 
 class AnalogTXIO extends Bundle {
   val loFSK = Output(UInt(8.W))
-  val pllReady = Input(Bool())
 }
 
-class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
+class AnalogRXIO(val params: BLEBasebandModemParams) extends Bundle {
   val i = new Bundle {
     val data = Input(UInt(params.adcBits.W))
   }
@@ -25,7 +24,7 @@ class AnalogRXIO(params: BLEBasebandModemParams) extends Bundle {
   }
 }
 
-class GFSKModemAnalogIO(params: BLEBasebandModemParams) extends Bundle {
+class GFSKModemAnalogIO(val params: BLEBasebandModemParams) extends Bundle {
   val tx = new AnalogTXIO
   val rx = new AnalogRXIO(params)
   val loCT = Output(UInt(8.W))
@@ -117,6 +116,7 @@ class GFSKModemTuningIO extends Bundle {
       val i = UInt(5.W)
       val q = UInt(5.W)
     }
+    val debug = Bool()
   }
   val mux = new Bundle {
     val dbg = new Bundle {
@@ -190,27 +190,19 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   val tx = Module(new GFSKTX(params))
   tx.io.control <> io.control.tx
 
-  val rx = Module(new GFSKRX(params))
-  rx.io.control <> io.control.rx
-
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
 
-  // TODO: SHOULD THIS LOOPBACK BE HERE
-  val preModemLoopback = Module(new DecoupledLoopback(UInt(1.W)))
-  preModemLoopback.io.select := false.B // TODO: THIS SHOULD BE MMIO??
-  preModemLoopback.io.left.in <> txQueue
-  tx.io.digital.in <> preModemLoopback.io.left.out
-  preModemLoopback.io.right.in <> rx.io.digital.out
+  val rx = Module(new GFSKRX(params))
+  rx.io.control <> io.control.rx
+
+  val rxQueue = Queue(rx.io.digital.out, params.modemQueueDepth)
+  io.digital.rx <> rxQueue
 
   /* TODO: Does the ADC Latch the data? */
   val i = RegNext(io.analog.rx.i.data) // TODO: Validate these DFF are connected to the ADC post-elaboration
   val q = RegNext(io.analog.rx.q.data)
   val valid = RegNext(io.control.rx.in.enable)
-
-  val rxQueue = Queue(rx.io.digital.out, params.modemQueueDepth)//Queue(preModemLoopback.io.right.out, params.modemQueueDepth)
-  preModemLoopback.io.right.out.ready := 1.B
-  io.digital.rx <> rxQueue
 
   rx.io.analog.i.valid := valid
   rx.io.analog.i.bits := i
