@@ -3,6 +3,7 @@ package baseband
 import chisel3._
 import chisel3.experimental.BundleLiterals.AddBundleLiteralConstructor
 import chisel3.util._
+import BasebandISA._
 
 import ee290cdma._
 import modem._
@@ -31,9 +32,10 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
     }
     val constants = Input(new BasebandConstants)
     val control = new TXChainControllerControlIO(params.paddrBits, params.maxReadSize)
+    val messages = new BLEBasebandModemMessagesIO
   })
 
-  val s_idle :: s_working :: Nil = Enum(2)
+  val s_idle :: s_working :: s_error :: Nil = Enum(3)
   val state = RegInit(s_idle)
 
   val done = RegInit(false.B)
@@ -51,6 +53,9 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 
   val error = RegInit(false.B)
   val txFinish = RegInit(false.B)
+
+  val errorMessageValid = RegInit(false.B)
+  val errorMessageBits = RegInit(0.U(32.W))
 
   // Control IO
   io.control.cmd.ready := io.assemblerControl.in.ready & io.dma.readReq.ready & state === s_idle
@@ -76,7 +81,16 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
   io.interrupt.error := error
   io.interrupt.txFinish := txFinish
 
-  // Set interrupts to be one cycle pulses
+  // Messages
+  io.messages.rxErrorMessage.bits := DontCare
+  io.messages.rxErrorMessage.valid := false.B
+  io.messages.rxFinishMessage.bits := DontCare
+  io.messages.rxFinishMessage.valid := false.B
+
+  io.messages.txErrorMessage.bits := errorMessageBits
+  io.messages.txErrorMessage.valid := errorMessageValid
+
+  // Set signals that are a 1-cycle pulse
   when(error) {
     error := false.B
   }
@@ -85,11 +99,13 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
     txFinish := false.B
   }
 
+  when(done) {
+    done := false.B
+  }
+
   // Main FSM
   switch(state) {
     is(s_idle) {
-      done := false.B
-
       when(io.control.cmd.fire()) {
         when(io.control.cmd.bits.totalBytes > 1.U & io.control.cmd.bits.totalBytes < 258.U) {
           cmd := io.control.cmd.bits
@@ -100,8 +116,18 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 
           state := s_working
         }.otherwise {
-          // TODO: Invalid PDU width exception
-          error := true.B
+          // Confirm that all regs get reset to false
+          assemblerReqValid := false.B
+          assemblerDone := false.B
+          modemTXReqValid := false.B
+          modemTXDone := false.B
+          dmaReqValid := false.B
+          dmaRespReady := false.B
+
+          errorMessageValid := true.B
+          errorMessageBits := ERROR_MESSAGE(TX_INVALID_LENGTH, io.control.cmd.bits.totalBytes)
+
+          state := s_error
         }
       }
     }
@@ -133,25 +159,40 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
       }
 
       when(assemblerDone && modemTXDone) {
-        when(dmaReadResp.bytesRead === cmd.totalBytes) { // DMA should complete before our packet is done sending, so the resp should match our cmd
-          // TODO: Place finish message in reg
+        // Confirm that all regs get reset to false
+        assemblerReqValid := false.B
+        assemblerDone := false.B
+        modemTXReqValid := false.B
+        modemTXDone := false.B
+        dmaReqValid := false.B
+        dmaRespReady := false.B
+
+        // DMA should complete before our packet is done sending, so the resp should match our cmd
+        when(dmaReadResp.bytesRead === cmd.totalBytes) {
+          // Interrupt to say that TX is finished
           txFinish := true.B
+
           // Fire done
           done := true.B
 
-          // Confirm that all regs get reset to false
-          assemblerReqValid := false.B
-          assemblerDone := false.B
-          modemTXReqValid := false.B
-          modemTXDone := false.B
-          dmaReqValid := false.B
-          dmaRespReady := false.B
-
           state := s_idle
         }.otherwise {
-          // TODO: Place error for didn't fetch enough DMA data into error reg
-          error := true.B
+          errorMessageValid := true.B
+          errorMessageBits := ERROR_MESSAGE(TX_NOT_ENOUGH_DMA_DATA, io.control.cmd.bits.totalBytes)
+          state := s_error
         }
+      }
+    }
+    is(s_error) {
+      when (io.messages.txErrorMessage.fire()) {
+        // Signal error only after the message is taken up
+        error := true.B
+        errorMessageValid := false.B
+
+        // Fire Done
+        done := true.B
+
+        state := s_idle
       }
     }
   }
@@ -181,9 +222,10 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
     }
     val constants = Input(new BasebandConstants)
     val control = new RXChainControllerControlIO(params.paddrBits)
+    val messages = new BLEBasebandModemMessagesIO
   })
 
-  val s_idle :: s_working :: Nil = Enum(2)
+  val s_idle :: s_working :: s_error :: s_rxFinish :: Nil = Enum(4)
   val state = RegInit(s_idle)
 
   val done = RegInit(false.B)
@@ -201,6 +243,12 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
   val error = RegInit(false.B)
   val rxStart = RegInit(false.B)
   val rxFinish = RegInit(false.B)
+
+  val errorMessageValid = RegInit(false.B)
+  val errorMessageBits = RegInit(0.U(32.W))
+
+  val rxFinishMessageValid = RegInit(false.B)
+  val rxFinishMessageBits = RegInit(0.U(32.W))
 
   def gotoIdle(): Unit = {
     // Signal done
@@ -234,7 +282,16 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
   io.interrupt.rxStart := rxStart
   io.interrupt.rxFinish := rxFinish
 
-  // Set interrupts to be one cycle pulses
+  // Messages
+  io.messages.txErrorMessage.bits := DontCare
+  io.messages.txErrorMessage.valid := DontCare
+
+  io.messages.rxErrorMessage.bits := errorMessageBits
+  io.messages.rxErrorMessage.valid := errorMessageValid
+  io.messages.rxFinishMessage.bits := rxFinishMessageBits
+  io.messages.rxFinishMessage.valid := rxFinishMessageValid
+
+  // Set up 1-cycle pulses
   when(error) {
     error := false.B
   }
@@ -247,10 +304,13 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
     rxFinish := false.B
   }
 
+  when(done) {
+    done := false.B
+  }
+
   // Main FSM
   switch(state) {
     is(s_idle) {
-      done := false.B
       disassemblerLength := 0.U
       disassemblerReqValid := false.B
       modemRXEnable := false.B
@@ -263,8 +323,9 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
           state := s_working
         }.otherwise {
-          // TODO: Place invalid rx addr in error reg
           error := true.B
+          errorMessageValid := true.B
+          errorMessageBits := ERROR_MESSAGE(RX_INVALID_ADDR)
           gotoIdle()
         }
       }
@@ -307,13 +368,37 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
         disassemblerLength := io.disassemblerControl.out.length
 
         when (io.disassemblerControl.out.flag_aa | io.disassemblerControl.out.flag_crc) {
-          // TODO: Exception
-          error := true.B
+          errorMessageValid := true.B
+          when(io.disassemblerControl.out.flag_aa && io.disassemblerControl.out.flag_crc) {
+            errorMessageBits := ERROR_MESSAGE(RX_FLAG_AA_AND_CRC)
+          }.elsewhen(io.disassemblerControl.out.flag_aa) {
+            errorMessageBits := ERROR_MESSAGE(RX_FLAG_AA)
+          }.otherwise {
+            errorMessageBits := ERROR_MESSAGE(RX_FLAG_CRC)
+          }
+          state := s_error
         }.otherwise {
-          // TODO: Send disassembler length in finish message
-          rxFinish := true.B
+          rxFinishMessageValid := true.B
+          rxFinishMessageBits := RX_FINISH_MESSAGE(disassemblerLength)
+          state := s_rxFinish
         }
+      }
+    }
+    is(s_rxFinish) {
+      when(io.messages.rxFinishMessage.fire()) {
+        // Send finish after message taken up
+        rxFinish := true.B
 
+        rxFinishMessageValid := false.B
+        gotoIdle()
+      }
+    }
+    is(s_error) {
+      when(io.messages.rxErrorMessage.fire()) {
+        // Send error after message taken up
+        error := true.B
+
+        errorMessageValid := false.B
         gotoIdle()
       }
     }
@@ -322,12 +407,7 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
 class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   val io = IO(new Bundle {
-    val interrupt = new Bundle {
-      val error = Output(Bool())
-      val txFinish = Output(Bool())
-      val rxStart = Output(Bool())
-      val rxFinish = Output(Bool())
-    }
+    val interrupt = Output(new BLEBasebandModemInterrupts)
     val analog = new Bundle {
       val offChipMode = new Bundle {
         val rx = Output(Bool())
@@ -346,6 +426,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
       val readResp = Flipped(Decoupled(new EE290CDMAReaderResp(params.maxReadSize)))
     }
     val modemControl = Flipped(new GFSKModemControlIO(params))
+    val messages = new BLEBasebandModemMessagesIO
   })
 
   val constants = RegInit(new BasebandConstants, WireInit(new BasebandConstants().Lit(
@@ -373,6 +454,8 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   val txControllerCmd = Reg(new TXChainControllerCommand(params.paddrBits, params.maxReadSize))
   txController.io.control.cmd.valid := txControllerCmdValid
   txController.io.control.cmd.bits := txControllerCmd
+  txController.io.messages.rxFinishMessage.ready := false.B
+  txController.io.messages.rxErrorMessage.ready := false.B
 
   val txControllerDone = RegInit(false.B)
 
@@ -380,6 +463,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   val rxController = Module(new RXChainController(params))
   io.basebandControl.disassembler <> rxController.io.disassemblerControl
   io.basebandControl.baseAddr <> rxController.io.control.baseAddr
+  rxController.io.messages.txErrorMessage.ready := false.B
 
   rxController.io.constants := constants
 
@@ -400,11 +484,17 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   io.analog.offChipMode.rx := state === s_rx
   io.analog.offChipMode.tx := state === s_tx
 
-  // Interrupt
-  io.interrupt.error := txController.io.interrupt.error | rxController.io.interrupt.error
+  // Interrupts
+  io.interrupt.txError := txController.io.interrupt.error
   io.interrupt.txFinish := txController.io.interrupt.txFinish
+  io.interrupt.rxError :=  rxController.io.interrupt.error
   io.interrupt.rxStart := rxController.io.interrupt.rxStart
   io.interrupt.rxFinish := rxController.io.interrupt.rxFinish
+
+  // Messages
+  io.messages.txErrorMessage <> txController.io.messages.txErrorMessage
+  io.messages.rxErrorMessage <> rxController.io.messages.rxErrorMessage
+  io.messages.rxFinishMessage <> rxController.io.messages.rxFinishMessage
 
   // Command wires
   io.cmd.ready := state === s_idle

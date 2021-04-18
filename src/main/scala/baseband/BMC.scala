@@ -26,13 +26,9 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
       val readData = Flipped(Decoupled(UInt((beatBytes * 8).W)))
       val writeReq = Decoupled(new EE290CDMAWriterReq(params.paddrBits, beatBytes))
     }
-    val interrupt = new Bundle {
-      val error = Output(Bool())
-      val txFinish = Output(Bool())
-      val rxStart = Output(Bool())
-      val rxFinish = Output(Bool())
-    }
+    val interrupt = Output(new BLEBasebandModemInterrupts)
     val lutCmd = Flipped(Decoupled(new GFSKModemLUTCommand))
+    val messages =  new BLEBasebandModemMessagesIO
     val tuning = new Bundle {
       val data = new Bundle {
         val i = new Bundle {
@@ -76,9 +72,11 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
 
   // Interrupts
-  io.interrupt.error := controller.io.interrupt.error
+  io.messages <> controller.io.messages
+  io.interrupt.rxError := controller.io.interrupt.rxError
   io.interrupt.rxStart := controller.io.interrupt.rxStart
   io.interrupt.rxFinish := controller.io.interrupt.rxFinish
+  io.interrupt.txError := controller.io.interrupt.txError
   io.interrupt.txFinish := controller.io.interrupt.txFinish
 
   // Enables

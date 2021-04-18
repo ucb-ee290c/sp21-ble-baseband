@@ -52,15 +52,17 @@ class BLEBasebandModemStatus extends Bundle {
 }
 
 class BLEBasebandModemInterrupts extends Bundle {
-  val error = Bool()
+  val rxError = Bool()
   val rxStart = Bool()
   val rxFinish = Bool()
+  val txError = Bool()
   val txFinish = Bool()
 }
 
 class BLEBasebandModemMessagesIO extends Bundle {
-  val errorMessage = Decoupled(UInt(32.W))
+  val rxErrorMessage = Decoupled(UInt(32.W))
   val rxFinishMessage = Decoupled(UInt(32.W))
+  val txErrorMessage = Decoupled(UInt(32.W))
 }
 
 class BLEBasebandModemBackendIO extends Bundle {
@@ -194,14 +196,13 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   val image_rejection_op = RegInit(false.B) // TODO: Griffin, you can set this to either initial value
 
-  val errorMessage = Wire(new DecoupledIO(UInt(32.W)))
+  val rxErrorMessage = Wire(new DecoupledIO(UInt(32.W)))
   val rxFinishMessage = Wire(new DecoupledIO(UInt(32.W)))
+  val txErrorMessage = Wire(new DecoupledIO(UInt(32.W)))
 
-  // TODO: Wire in connections to Controller
-  errorMessage.bits := DontCare
-  errorMessage.valid := false.B
-  rxFinishMessage.bits := DontCare
-  rxFinishMessage.valid := false.B
+  rxErrorMessage <> io.back.messages.rxErrorMessage
+  rxFinishMessage <> io.back.messages.rxFinishMessage
+  txErrorMessage <> io.back.messages.txErrorMessage
 
   io.tuning.trim.g0 := trim_g0
   io.tuning.trim.g1 := trim_g1
@@ -276,10 +277,11 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuningControl.imageRejectionOp := image_rejection_op
 
   // Interrupts
-  interrupts(0) := io.back.interrupt.error
+  interrupts(0) := io.back.interrupt.rxError
   interrupts(1) := io.back.interrupt.rxStart
   interrupts(2) := io.back.interrupt.rxFinish
-  interrupts(3) := io.back.interrupt.txFinish
+  interrupts(3) := io.back.interrupt.txError
+  interrupts(4) := io.back.interrupt.txFinish
 
   regmap(
     0x00 -> Seq(RegField.w(32, inst)), // Command start
@@ -362,15 +364,16 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x4E -> Seq(RegField(5, enable_rx_q)),
     0x4F -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
     0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
-    0x54 -> Seq(RegField.r(32, errorMessage)), // Interrupt Messages
-    0x58 -> Seq(RegField.r(32, rxFinishMessage))
+    0x54 -> Seq(RegField.r(32, rxErrorMessage)), // Interrupt Messages
+    0x58 -> Seq(RegField.r(32, rxFinishMessage)),
+    0x5C -> Seq(RegField.r(32, txErrorMessage))
   )
 }
 
 class BLEBasebandModemFrontend(params: BLEBasebandModemParams, beatBytes: Int)(implicit p: Parameters)
   extends TLRegisterRouter(
     params.address, "baseband", Seq("ucbbar, riscv"),
-    beatBytes = beatBytes, interrupts = 4)( // TODO: Interrupts and compatible list
+    beatBytes = beatBytes, interrupts = 5)( // TODO: Interrupts and compatible list
       new TLRegBundle(params, _) with BLEBasebandModemFrontendBundle)(
       new TLRegModule(params, _, _) with BLEBasebandModemFrontendModule)
 
@@ -408,10 +411,16 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   bmc.io.lutCmd <> basebandFrontend.io.back.lutCmd
   bmc.io.tuning.control := basebandFrontend.io.tuningControl
 
+  // Interrupt Message Store
+  val messageStore = Module(new MessageStore(params))
+  messageStore.io.in <> bmc.io.messages
+  basebandFrontend.io.back.messages <> messageStore.io.out
+
   // Interrupts
-  basebandFrontend.io.back.interrupt.error := bmc.io.interrupt.error // TODO: Add more blocks with errors here
+  basebandFrontend.io.back.interrupt.rxError := bmc.io.interrupt.rxError // TODO: Add more blocks with errors here
   basebandFrontend.io.back.interrupt.rxStart := bmc.io.interrupt.rxStart
   basebandFrontend.io.back.interrupt.rxFinish := bmc.io.interrupt.rxFinish
+  basebandFrontend.io.back.interrupt.txError := bmc.io.interrupt.txError // TODO: Add more blocks with errors here
   basebandFrontend.io.back.interrupt.txFinish := bmc.io.interrupt.txFinish
 
   // Other off chip / analog IO

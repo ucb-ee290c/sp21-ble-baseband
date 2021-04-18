@@ -52,9 +52,23 @@ object BasebandISA {
   val DEBUG_CMD = 15.U
 
   // Interrupt reason codes
-  val INTERRUPT_REASON_INVALID_TX_LENGTH = 0
+  val TX_INVALID_LENGTH = 0
+  val TX_NOT_ENOUGH_DMA_DATA = 1
 
-  def INTERRUPT(reason: Int, message: Int = 0): UInt = {
+  val RX_INVALID_ADDR = 32
+  val RX_FLAG_AA = 33
+  val RX_FLAG_CRC = 34
+  val RX_FLAG_AA_AND_CRC = 35
+
+  def ERROR_MESSAGE(reason: Int, message: Int = 0): UInt = {
     Cat(message.U(26.W), reason.U(6.W))
+  }
+
+  def ERROR_MESSAGE(reason: Int, message: UInt): UInt = {
+    Cat(message.pad(26), reason.U(6.W))
+  }
+
+  def RX_FINISH_MESSAGE(bytesReceived: UInt): UInt = {
+    bytesReceived.pad(32)
   }
 }

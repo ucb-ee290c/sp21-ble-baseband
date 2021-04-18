@@ -239,7 +239,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
-  it should "Output proper GFSK codes on a random channel index" in {
+  it should "Output proper GFSK codes on a random channel index" in { // Note: messages shortened such that graphs are viewable
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
       val dmaReadReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.readReq, 0)
@@ -277,7 +277,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
             _.additionalData -> channelIndex.U)
         ))
 
-        val pduLengthIn = scala.util.Random.nextInt(5) + 2
+        val pduLengthIn = scala.util.Random.nextInt(10) + 2
         val addrInString = s"x${scala.util.Random.nextInt(1600)}0"
 
         println(s"Test ${i}:\t pduLength ${pduLengthIn},\t addr 0${addrInString}")
