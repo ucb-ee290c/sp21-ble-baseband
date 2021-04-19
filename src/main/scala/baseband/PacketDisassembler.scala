@@ -110,8 +110,8 @@ class PacketDisassembler extends Module {
   val dewhite_data = Wire(UInt(1.W))
   val dewhite_valid = Wire(Bool())
   val dewhite_result = Wire(UInt(1.W))
-  val dewhite_seed = Cat(Reverse(io.constants.channelIndex), 0.U(1.W))
-
+  val dewhite_seed = Cat(1.U(1.W), Reverse(io.constants.channelIndex)) // TODO: Verify this, it was very wrong to begin with...
+  // TODO: Make sure to change the WHITENER TOO!
 
 
   //output function
@@ -279,6 +279,7 @@ class PacketDisassembler extends Module {
       }
     }
   }.elsewhen (state === s_crc) { // TODO: We don't need to write out CRC data
+    // TODO: Remember the CRC is sent with ~*MSB*~ first, verify this
     val (stateOut, counterOut, counterByteOut) = stateUpdate(s_crc, s_idle, 3.U, counter, counter_byte, in_fire)
     state := stateOut
     counter := counterOut
@@ -287,10 +288,10 @@ class PacketDisassembler extends Module {
     out_valid := false.B
 
     when (in_fire) {
-      data(counter_byte) := io.in.data.bits.asBool()
+      data(counter_byte) := dewhite_result.asBool() // TODO: This has been fixed, the CRC is also whitened
       when (counter_byte === 7.U) {
         // CRC Flag
-        val nextData = Cat(io.in.data.bits.asBool(), data.asUInt().apply(6,0))
+        val nextData = Cat(dewhite_result.asBool(), data.asUInt().apply(6,0))
         for (i <- 0 to 2) {
           when(counter === i.U){
             flag_crc := nextData =/= crc_result(8*(i+1)-1, 8*i) | flag_crc

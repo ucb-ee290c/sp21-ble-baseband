@@ -69,7 +69,12 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   modem.io.digital.rx <> baseband.io.modem.digital.rx
   modem.io.tuning <> io.tuning
 
+  // TODO: Validate
   baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
+  modem.io.control.rx.in.imageRejectionOp := 0.B // TODO: Connect this to an MMIO
+  modem.io.control.rx.in.enable := controller.io.analog.enable.rx
+  modem.io.control.rx.in.accessAddressLSB := controller.io.constants.accessAddress(0) // TODO: Connect this to the actual ACCESS ADDRESS
+  modem.io.control.rx.in.preambleDetectionThreshold := 140.U // TODO: MMIO
 
   // Interrupts
   io.messages <> controller.io.messages

@@ -78,7 +78,7 @@ class CRC extends Module {
   // i.e. from position 23 to position 0 (see Section 1.2).
 
   when (io.init) {
-    lfsr := Reverse(io.seed)
+    lfsr := Reverse(io.seed) // TODO: Verify
   }.elsewhen (io.operand.fire()) {
     // LFSR follows the Figure 3.3 of BLE spec version 5.0 vol 6
     // position 0 (left most) is represented by lfsr[23]

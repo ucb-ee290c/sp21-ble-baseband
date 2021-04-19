@@ -7,11 +7,13 @@ import chisel3.util._
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder._
 import chiseltest.internal.{TreadleBackendAnnotation, VerilatorBackendAnnotation, WriteVcdAnnotation}
-import modem.{GFSKModemAnalogIO, GFSKModemLUTCodes, GFSKModemLUTCommand}
+import modem.{GFSKModemAnalogIO, GFSKModemLUTCodes, GFSKModemLUTCommand, TestUtility}
 import org.scalatest.flatspec.AnyFlatSpec
 
 import verif._
-import ee290cdma._
+import  ee290cdma._
+import scala.collection.immutable.Seq
+import scala.util.Random
 
 class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
   def seqToBinary(in: Seq[Int]): Seq[Int] = {
@@ -41,7 +43,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
   val tests = 1
   val params = BLEBasebandModemParams()
   val beatBytes = 4
-
+/*
   it should "Pass a full baseband loop without whitening" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -334,6 +336,74 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
         val f = Figure()
         val p = f.subplot(0)
         p += plot(Seq.tabulate(signedData.size)(i => i), signedData, colorcode = "r")
+      }
+    }
+  }
+*/
+  it should "Properly receive data with random channel index" in {
+    test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
+      val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
+      val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
+
+      for (i <- 0 until tests) {
+        val channelIndex = 0
+        val accessAddress = scala.util.Random.nextInt.abs
+        val crcSeed = s"x555555"
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX,
+            _.additionalData -> channelIndex.U)
+        ))
+        c.clock.step()
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_ACCESS_ADDRESS,
+            _.additionalData -> accessAddress.U(32.W))
+        ))
+        c.clock.step()
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_CRC_SEED,
+            _.additionalData -> crcSeed.U)
+        ))
+        c.clock.step()
+
+        val addrInString = s"x${scala.util.Random.nextInt(1600)}0"
+
+        println(s"Test: \t addr 0${addrInString}")
+
+        // Push a debug command with post assembler loopback
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.RECEIVE_START_CMD,
+            _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
+        ))
+        c.clock.step()
+        val length = 10
+        val (packet, pdu) = TestUtility.packet(accessAddress, length)
+        val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
+        val input = TestUtility.testWaveform(bits)
+
+        for (s <- input) {
+          c.io.analog.data.rx.i.data.poke(s._1.U(5.W))
+          c.io.analog.data.rx.q.data.poke(s._1.U(5.W))
+          c.clock.step()
+        }
+        var outputBits = Seq[BigInt]()
+        var outputLength = 0
+        dmaWriteReqMonitor.monitoredTransactions
+          .map(t => t.data)
+          .foreach { o =>
+              outputLength = outputLength + o.totalBytes.litValue.toInt
+              outputBits = outputBits ++ Seq.tabulate(o.totalBytes.litValue.toInt * 8) {i => (o.data.litValue >> i) & 0x1}
+          }
+        println("Expected: ", pdu)
+        println("Recieved: ", outputBits)
+        assert(length + 2 == outputLength)
+        assert(pdu == outputBits)
       }
     }
   }
