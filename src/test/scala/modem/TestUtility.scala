@@ -114,4 +114,43 @@ object TestUtility {
 
     noisySignal
   }
+
+  def crc(bits: Seq[Int]): Seq[Int] = {
+    var lfsr = Seq.tabulate(6){i => Seq(0, 1, 0, 1)}.flatten.reverse
+    def genCRC(b: Int) = {
+      val last = lfsr.last
+      lfsr = lfsr.indices.map { i =>
+        val xor = lfsr.last ^ b
+        if (i == 0) {
+          xor
+        } else if (i == 1) {
+          xor ^ lfsr(0)
+        } else if (i == 3) {
+          xor ^ lfsr(2)
+        } else if (i == 4) {
+          xor ^ lfsr(3)
+        } else if (i == 6) {
+          xor ^ lfsr(5)
+        } else if (i == 9) {
+          xor ^ lfsr(8)
+        } else if (i == 10) {
+          xor ^ lfsr(9)
+        } else {
+          lfsr(i - 1)
+        }
+      }
+    }
+    bits.toList.foreach {genCRC(_)}
+    lfsr.reverse
+  }
+
+  def packet(aa: Int, length: Int): (Seq[Int], Seq[Int]) = {
+    val aaLSB = aa & 0x1
+    val preamble = Seq.tabulate(8){i => if (i % 2 == aaLSB) 0 else 1}
+    val accessAddress = Seq.tabulate(32){i => (aa >> i) & 0x1}
+    val pduLength = length
+    val header = Seq.tabulate(8){i => 0} ++ Seq.tabulate(8){i => (pduLength >> i) & 0x1}
+    val pdu = header ++ Seq.tabulate(pduLength * 8){_ => Random.nextInt(2)}
+    (preamble ++ accessAddress ++ whiten(pdu ++ crc(pdu)), pdu)
+  }
 }

@@ -283,7 +283,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   interrupts(3) := io.back.interrupt.txError
   interrupts(4) := io.back.interrupt.txFinish
 
-  regmap(
+  regmap( // TODO: IMPORTANT Reminder, there are two different interpretations of "Channel Index"
     0x00 -> Seq(RegField.w(32, inst)), // Command start
     0x04 -> Seq(RegField.w(32, additionalData)),
     0x08 -> Seq(RegField.r(32, status0)), // Status start
