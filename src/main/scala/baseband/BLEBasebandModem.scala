@@ -189,7 +189,6 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val dac_t2 = RegInit(0.U(6.W))
   val dac_t3 = RegInit(0.U(6.W))
 
-  val enableDebug = RegInit(false.B)
   val mux_dbg_in = RegInit(0.U(10.W))
   val mux_dbg_out = RegInit(0.U(10.W))
   val enable_rx_i = RegInit(0.U(5.W))
@@ -270,10 +269,9 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.dac.t2 := dac_t2
   io.tuning.dac.t3 := dac_t3
 
-  io.tuningControl.debug.enabled := enableDebug
+  io.tuningControl.debug.enabled := trim_g7(0)
   io.tuning.mux.dbg.in := mux_dbg_in
   io.tuning.mux.dbg.out := mux_dbg_out
-  io.tuning.enable.debug := enableDebug
   io.tuning.enable.rx.i := enable_rx_i
   io.tuning.enable.rx.q := enable_rx_q
 
@@ -302,7 +300,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x20 -> Seq(RegField(8, trim_g4)),
     0x21 -> Seq(RegField(8, trim_g5)),
     0x22 -> Seq(RegField(8, trim_g6)),
-    0x23 -> Seq(RegField(8, trim_g7)),
+    0x23 -> Seq(RegField(8, trim_g7)), // 0: debugEnable
     0x24 -> Seq( // Mixer
       RegField(4, mixer_r0),
       RegField(4, mixer_r1)),
@@ -361,12 +359,12 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x45 -> Seq(RegField(6, dac_t1)),
     0x46 -> Seq(RegField(6, dac_t2)),
     0x47 -> Seq(RegField(6, dac_t3)),
-    0x48 -> Seq(RegField(1, enableDebug)), // Debug Configuration
-    0x49 -> Seq(RegField(10, mux_dbg_in)),
-    0x4B -> Seq(RegField(10, mux_dbg_out)),
-    0x4D -> Seq(RegField(5, enable_rx_i)), // Manual enable values
-    0x4E -> Seq(RegField(5, enable_rx_q)),
-    0x4F -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
+    0x48 -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
+    //0x49 -> Seq(RegField(1, enableDebug)),
+    0x4A -> Seq(RegField(10, mux_dbg_in)), // Debug Configuration
+    0x4C -> Seq(RegField(10, mux_dbg_out)),
+    0x4E -> Seq(RegField(5, enable_rx_i)), // Manual enable values
+    0x4F -> Seq(RegField(5, enable_rx_q)),
     0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
     0x54 -> Seq(RegField.r(32, rxErrorMessage)), // Interrupt Messages
     0x58 -> Seq(RegField.r(32, rxFinishMessage)),

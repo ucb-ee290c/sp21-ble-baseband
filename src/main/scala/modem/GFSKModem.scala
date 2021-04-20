@@ -117,7 +117,6 @@ class GFSKModemTuningIO extends Bundle {
       val i = UInt(5.W)
       val q = UInt(5.W)
     }
-    val debug = Bool()
   }
   val mux = new Bundle {
     val dbg = new Bundle {
