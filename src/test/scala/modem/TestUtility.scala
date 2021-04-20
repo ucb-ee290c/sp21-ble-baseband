@@ -62,9 +62,11 @@ object TestUtility {
     }
   }
 
-  def RFtoIF(in: Seq[Double], Fc: Double, imageIn: Seq[Double] = Seq(), imageFc: Double = F_IM): Seq[(Double, Double)] = {
+  def RFtoIF(in: Seq[Double], Fc: Double, imageIn: Seq[Double] = Seq(), imageFc: Double = F_IM, modulationIndex: Double = 0.5): Seq[(Double, Double)] = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length / 10)).toInt)(_ * (1/(analog_F_sample)))
-    val frequencies = timeSteps.map {t => Fc + in((t / (symbol_time / 10)).floor.toInt) * 0.25 * MHz }
+    val modulationFrequencyDeviation = modulationIndex / (2 * symbol_time)
+    println("Modulation Index: ", modulationIndex, "Modulation Frequency Deviation: ", modulationFrequencyDeviation)
+    val frequencies = timeSteps.map {t => Fc + in((t / (symbol_time / 10)).floor.toInt) * modulationFrequencyDeviation }
     val phases = frequencies.map{var s: Double = 0.0; d => {s += d; 2 * math.Pi * s * (1/analog_F_sample)}}
     val rf = phases.map {math.cos(_)}
     var signal = rf
@@ -90,7 +92,8 @@ object TestUtility {
 
   def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
     val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
-    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+    val modulationIndex = 0.45 + Random.nextDouble / 10
+    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency, modulationIndex = modulationIndex))
   }
 
   def noisyTestWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, noiseAmplitude: Double = 1.0): (Seq[(Int, Int)]) = {
@@ -144,11 +147,11 @@ object TestUtility {
     lfsr.reverse
   }
 
-  def packet(aa: Int, length: Int): (Seq[Int], Seq[Int]) = {
+  def packet(aa: Int, bytes: Int): (Seq[Int], Seq[Int]) = {
     val aaLSB = aa & 0x1
     val preamble = Seq.tabulate(8){i => if (i % 2 == aaLSB) 0 else 1}
     val accessAddress = Seq.tabulate(32){i => (aa >> i) & 0x1}
-    val pduLength = length
+    val pduLength = bytes
     val header = Seq.tabulate(8){i => 0} ++ Seq.tabulate(8){i => (pduLength >> i) & 0x1}
     val pdu = header ++ Seq.tabulate(pduLength * 8){_ => Random.nextInt(2)}
     (preamble ++ accessAddress ++ whiten(pdu ++ crc(pdu)), pdu)

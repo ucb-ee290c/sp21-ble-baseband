@@ -15,11 +15,12 @@ case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
   paddrBits: Int = 32,
   maxReadSize: Int = 258,
-  adcBits: Int = 8,
+  adcBits: Int = 5, // TODO: what is this value actually going to be?
   adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
   modemQueueDepth: Int = 256,
   cyclesPerSymbol: Int = 10,
+  samplesPerSymbol: Int = 20,
   agcMaxWindow: Int = 5,
   interruptMessageQueueDepth: Int = 1)
 
@@ -194,7 +195,9 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val enable_rx_i = RegInit(0.U(5.W))
   val enable_rx_q = RegInit(0.U(5.W))
 
-  val image_rejection_op = RegInit(false.B) // TODO: Griffin, you can set this to either initial value
+  /* Modem RX MMIO Parameters */
+  val image_rejection_op = RegInit(false.B)
+  val preambleDetectionThreshold = RegInit(140.U(log2Ceil(20 * 8 + 1).W))
 
   val rxErrorMessage = Wire(new DecoupledIO(UInt(32.W)))
   val rxFinishMessage = Wire(new DecoupledIO(UInt(32.W)))
@@ -275,6 +278,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.tuning.enable.rx.q := enable_rx_q
 
   io.tuningControl.imageRejectionOp := image_rejection_op
+  io.tuningControl.preambleDetectionThreshold := preambleDetectionThreshold
 
   // Interrupts
   interrupts(0) := io.back.interrupt.rxError
@@ -366,7 +370,8 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
     0x54 -> Seq(RegField.r(32, rxErrorMessage)), // Interrupt Messages
     0x58 -> Seq(RegField.r(32, rxFinishMessage)),
-    0x5C -> Seq(RegField.r(32, txErrorMessage))
+    0x5C -> Seq(RegField.r(32, txErrorMessage)),
+    0x60 -> Seq(RegField.w(log2Ceil(20 * 8 + 1), preambleDetectionThreshold))
   )
 }
 

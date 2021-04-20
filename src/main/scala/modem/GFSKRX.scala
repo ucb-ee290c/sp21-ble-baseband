@@ -33,6 +33,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
     val control = new GFSKRXControlIO
   })
 
+  /* Hilbert Filter for digital Image Rejection */
   val imageRejection = Module (new HilbertFilter(params))
   imageRejection.io.in.i.valid := io.analog.i.valid
   imageRejection.io.in.q.valid := io.analog.q.valid
@@ -42,42 +43,42 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
 
+  /* GFSK Demodulation from recovered signal */
+  val guess = Wire(Bool())
   val demod = Module(new GFSKDemodulation(params, imageRejection.io.out.bits.getWidth))
   demod.io.signal.bits := imageRejection.io.out.bits
   demod.io.signal.valid := imageRejection.io.out.valid
   imageRejection.io.out.ready := demod.io.signal.ready
+  demod.io.guess.ready := io.control.in.enable && io.digital.out.ready
+  guess := demod.io.guess.bits
 
-  def detectEdge(x: Bool) = x =/= RegNext(x)
-  def risingedge(x: Bool) = x && !RegNext(x)
-  def fallingedge(x: Bool) = !x && RegNext(x)
-
-  val guess = Wire(Bool())
+  /* Clock and Data Recovery */
   val cdr = Module(new FPSCDR)
   val beginSampling = Wire(Bool())
-  guess := demod.io.guess.bits
-  demod.io.guess.ready := io.control.in.enable && io.digital.out.ready
-
-
-  val accumulator = Wire(SInt(8.W)) // TODO: THIS WIDTH IS VERY IMPORTANT, THIS VALUE CANNOT OVERFLOW
-  accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(8.W))
   cdr.io.d :=  guess
-  beginSampling := risingedge(cdr.io.clk)
+  beginSampling := Utility.risingedge(cdr.io.clk)
+
+  /* Temporal Majority Voting for determining each symbol, begins on the rising edge of the `beginSampling` signal from CDR */
+  val accumulatorWidth = log2Ceil(params.samplesPerSymbol * 2) + 1 // About twice as big as necessary, just to be safe.
+  val accumulator = Wire(SInt(accumulatorWidth.W))
+  accumulator := RegNext(Mux(beginSampling, 0.S, accumulator + Mux(guess, 1.S, (-1).S).asSInt()), 0.S(accumulatorWidth.W))
   io.digital.out.valid := beginSampling & io.control.out.preambleDetected
   io.digital.out.bits := Mux(accumulator > 0.S, 1.U, 0.U)
 
+  /* Preamble Detection */
   val preambleDetector = Module(new PreambleDetector())
-  val preambleDetected = RegInit(0.B)
+  val preambleDetected = RegInit(0.B) // TODO: Reset these when needed.
   val preambleValid = RegInit(0.B)
-
   preambleDetector.io.control.firstBit := io.control.in.accessAddressLSB
   preambleDetector.io.in := guess
   preambleDetector.io.control.threshold := io.control.in.preambleDetectionThreshold
   preambleDetector.io.control.reset := beginSampling
 
+  /* Look for a preamble match between the falling edges of the clock. */
   when (preambleDetector.io.detected) {
     preambleDetected := 1.B
   }
-  when (fallingedge(cdr.io.clk)) {
+  when (Utility.fallingedge(cdr.io.clk)) {
     preambleValid := preambleDetected
   }
   io.control.out.preambleDetected := preambleValid

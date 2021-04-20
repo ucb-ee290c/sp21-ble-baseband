@@ -9,7 +9,7 @@ class PreambleDetector extends Module {
     val control = Input(new Bundle {
       val firstBit = UInt(1.W)
       val reset = Input(Bool())
-      val threshold = UInt(log2Ceil(20 * 8 + 1).W)
+      val threshold = UInt(log2Ceil(20 * 8 + 1).W) // TODO, parameterize this
     })
     val detected = Output(Bool())
   })
@@ -19,8 +19,7 @@ class PreambleDetector extends Module {
 
   val matches = Wire(Bool())
   val sawMatch = RegInit(0.B)
-  def risingedge(x: Bool) = x && !RegNext(x)
-  when (risingedge(matches)) {
+  when (Utility.risingedge(matches)) {
     sawMatch := 1.B
   }.elsewhen (io.control.reset) {
     sawMatch := 0.B

@@ -53,6 +53,7 @@ class GFSKModemTuningControlIO(val params: BLEBasebandModemParams) extends Bundl
     }
   }
   val imageRejectionOp = Bool()
+  val preambleDetectionThreshold = UInt(log2Ceil(20 * 8 + 1).W)
   val debug = new Bundle {
     val enabled = Bool()
   }
@@ -206,8 +207,6 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
 
   rx.io.analog.i.valid := valid
   rx.io.analog.i.bits := i
-
-
 
   rx.io.analog.q.valid := valid
   rx.io.analog.q.bits := q

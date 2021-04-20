@@ -2,6 +2,13 @@ package modem
 
 object FIRCoefficients {
 
+  /* The stable modulation index for BLE is between 0.45 and 0.55. So our target value is h = 0.5.
+      ∆f, the peak frequency deviation is defined as:
+          ∆f = h * 0.5 * 1/Ts = 250kHz
+      Thus, our frequency for 0 is f_IF - ∆f = 2MHz - 250kHz = 1.75MHz
+            Our frequency for 1 is f_IF + ∆f = 2MHz + 250kHz = 2.25MHz
+   */
+
   /* Design Parameters:
       Order: 30, Fs: 20MHz, Fs1: 1.25MHz, Fp1: 1.5MHz, Fp2: 2MHz, Fs2: 2.25MHz
   */

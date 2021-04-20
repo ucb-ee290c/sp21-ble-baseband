@@ -5,7 +5,6 @@ import chisel3.util._
 import chisel3.Module
 
 class CDRDCO extends Module {
-  def risingedge(x: Bool) = x && !RegNext(x)
   val io = IO(new Bundle {
     val in = Input(new Bundle {
       val inc = Bool()
@@ -22,15 +21,15 @@ class CDRDCO extends Module {
   val shouldToggle = !(willInc & !toggleFF | willDec & toggleFF)
   toggleFF := RegEnable(!toggleFF, 0.B, shouldToggle)
 
-  when (risingedge(io.in.inc)) {
+  when (Utility.risingedge(io.in.inc)) {
     willInc := 1.B
-  }.elsewhen(Counter(0 until 2, !toggleFF, risingedge(io.in.inc))._2) {
+  }.elsewhen(Counter(0 until 2, !toggleFF, Utility.risingedge(io.in.inc))._2) {
     willInc := 0.B
   }
 
-  when (risingedge(io.in.dec)) {
+  when (Utility.risingedge(io.in.dec)) {
     willDec := 1.B
-  }.elsewhen(Counter(0 until 2, toggleFF, risingedge(io.in.dec))._2) {
+  }.elsewhen(Counter(0 until 2, toggleFF, Utility.risingedge(io.in.dec))._2) {
     willDec := 0.B
   }
 
@@ -40,7 +39,6 @@ class CDRDCO extends Module {
 }
 
 class FPSCDR extends Module {
-  def risingedge(x: Bool) = x && !RegNext(x)
   val io = IO(new Bundle {
     val d = Input(Bool())
     val clk = Output(Bool())
@@ -50,9 +48,9 @@ class FPSCDR extends Module {
 
   val dco = Module(new CDRDCO).io
 
-  io.clk := RegEnable(!io.clk, 1.B, risingedge(Counter(dco.out.clk, 5)._2))
+  io.clk := RegEnable(!io.clk, 1.B, Utility.risingedge(Counter(dco.out.clk, 5)._2))
 
-  when (risingedge(io.clk)) {
+  when (Utility.risingedge(io.clk)) {
     when (state === s_idle) {
       state := s_tracking
     } .elsewhen (state === s_tracking) {
@@ -68,27 +66,27 @@ class FPSCDR extends Module {
 
   val earlyDone = Wire(Bool())
   val earlyCounter = Wire(UInt(8.W))
-  withReset(risingedge(state === s_tracking)) {
+  withReset(Utility.risingedge(state === s_tracking)) {
     earlyCounter := RegEnable(earlyCounter + 1.U, 0.U, !(earlyCounter === 17.U))
   }
   earlyDone := (earlyCounter === 17.U)
   val promptDone = Wire(Bool())
   val promptCounter = Wire(UInt(8.W))
-  withReset(risingedge(state === s_tracking)) {
+  withReset(Utility.risingedge(state === s_tracking)) {
     promptCounter := RegEnable(promptCounter + 1.U, 0.U, !(promptCounter === 19.U))
   }
   promptDone := (promptCounter === 19.U)
   val lateDone = Wire(Bool())
   val lateCounter = Wire(UInt(8.W))
-  withReset(risingedge(state === s_tracking)) {
+  withReset(Utility.risingedge(state === s_tracking)) {
     lateCounter := RegEnable(lateCounter + 1.U, 0.U, !(lateCounter === 21.U))
   }
   lateDone := (lateCounter === 21.U)
 
   accumulator.io.d := io.d
-  val early = RegEnable(accumulator.io.sum, 0.S, risingedge(earlyDone))
-  val prompt = RegEnable(accumulator.io.sum, 0.S, risingedge(promptDone))
-  val late = RegEnable(accumulator.io.sum, 0.S, risingedge(lateDone))
+  val early = RegEnable(accumulator.io.sum, 0.S, Utility.risingedge(earlyDone))
+  val prompt = RegEnable(accumulator.io.sum, 0.S, Utility.risingedge(promptDone))
+  val late = RegEnable(accumulator.io.sum, 0.S, Utility.risingedge(lateDone))
 
   val ready = ShiftRegister(earlyDone && promptDone && lateDone, 1)
 
