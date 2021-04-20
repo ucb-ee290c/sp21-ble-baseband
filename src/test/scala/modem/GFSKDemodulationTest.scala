@@ -79,7 +79,8 @@ class GFSKDemodulationTest extends AnyFlatSpec with ChiselScalatestTester {
   it should "Inspect Envelope Detection Waveforms" in {
     test(new DemodulationTestModule(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val numberOfBytes = 2
-      val bits = Seq(0,0,0,0,0,0) ++ TestUtility.packet(0xFFFFFFFF, numberOfBytes)._1 ++ Seq(0,0,0,0,0,0,0)
+      val accessAddress = scala.util.Random.nextInt.abs
+      val bits = Seq(0,0,0,0,0,0) ++ TestUtility.packet(accessAddress, numberOfBytes)._1 ++ Seq(0,0,0,0,0,0,0)
       val input = TestUtility.testWaveform(bits)
       val initialPhaseOffset = Random.nextInt(20)
       c.clock.step(initialPhaseOffset) // random phase offset
