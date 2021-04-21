@@ -62,6 +62,14 @@ object TestUtility {
     }
   }
 
+  def centerInSupplies(in: Seq[(Double, Double)]): Seq[(Double, Double)] = {
+    val minI = in.map{_._1}.min
+    val maxI = in.map{_._1}.max
+    val minQ = in.map{_._2}.min
+    val maxQ = in.map{_._2}.max
+    in.map{ s => ((s._1 - minI) / (maxI - minI) * 0.9, (s._2 - minQ) / (maxQ - minQ) * 0.9)}
+  }
+
   def RFtoIF(in: Seq[Double], Fc: Double, imageIn: Seq[Double] = Seq(), imageFc: Double = F_IM, modulationIndex: Double = 0.5): Seq[(Double, Double)] = {
     val timeSteps = Seq.tabulate[Double]((analog_F_sample * symbol_time * (in.length / 10)).toInt)(_ * (1/(analog_F_sample)))
     val modulationFrequencyDeviation = modulationIndex / (2 * symbol_time)
@@ -79,15 +87,16 @@ object TestUtility {
 
     val I = timeSteps.indices.map {i => signal(i) * math.cos(2 * math.Pi * F_LO * timeSteps(i))}
     val Q = timeSteps.indices.map {i => signal(i) * math.sin(2 * math.Pi * F_LO * timeSteps(i))}
-    return analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz)
+    return centerInSupplies(analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz))
   }
-  def analogToDigital(in: (Seq[(Double, Double)])): (Seq[(Int, Int)]) = {
+  def analogToDigital(in: (Seq[(Double, Double)]), adcBits: Int = 5): (Seq[(Int, Int)]) = {
     val sampled = in.zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e}
     val maxI = sampled.map{_._1}.max
     val maxQ = sampled.map{_._2}.max
     val minI = sampled.map{_._1}.min
     val minQ = sampled.map{_._2}.min
-    return sampled.map{s: (Double, Double) => (((s._1 - minI) / (maxI - minI) * 31).toInt, ((s._2 - minQ) / (maxQ - minQ) * 31).toInt)}
+    val range = math.pow(2, adcBits) - 1
+    return sampled.map{s: (Double, Double) => (((s._1 - minI) / (maxI - minI) * range).toInt, ((s._2 - minQ) / (maxQ - minQ) * range).toInt)}
   }
 
   def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {

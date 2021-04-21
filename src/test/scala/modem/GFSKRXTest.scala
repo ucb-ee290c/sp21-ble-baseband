@@ -3,7 +3,7 @@ package modem
 import chisel3._
 import chisel3.experimental.BundleLiterals.AddBundleLiteralConstructor
 import chisel3.util._
-
+import breeze.plot.{Figure, plot}
 import collection.immutable.Seq
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder._
@@ -15,10 +15,9 @@ import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
-
 import breeze.stats.distributions.Gaussian
 import breeze.plot._
-
+import modem.TestUtility.{FIR, RFtoIF, bitstream, gaussian_weights}
 import verif._
 
 class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
@@ -48,6 +47,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
 }
 
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
+  /*
   it should "Determine SNR vs BER" in {
     val numberOfBytes = 2
 
@@ -89,7 +89,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
     println(SNRvBER)
   }
-
+  */
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
