@@ -93,26 +93,29 @@ object TestUtility {
     analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
   }
 
-  def noisyTestWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, noiseAmplitude: Double = 1.0): (Seq[(Int, Int)]) = {
+  def noisyTestWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, snr: Double = 10.0): (Seq[(Int, Int)]) = {
     val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
-    val cleanSignal = analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency))
+    val cleanSignal = RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency)
 
-    val noiseGen = Gaussian(0, 31.toDouble/6) // Gaussian with SD such that most data is between +/- 15.5
+    val noiseGen = Gaussian(0, 0.45 / Math.pow(10, snr / 20))
+
     val noise = noiseGen.sample(cleanSignal.length).zip(noiseGen.sample(cleanSignal.length))
 
     val noisySignal = cleanSignal.zip(noise).map { case ((i, q), (iNoise, qNoise)) =>
-      (i + noiseAmplitude * iNoise, q + noiseAmplitude * qNoise)
-    }.map { case (iNoisy, qNoisy) =>
-      (math.max(0, math.min(31, iNoisy.round)).toInt, math.max(0, math.min(31, qNoisy.round)).toInt)
+      (i + iNoise, q + qNoise)
+    }.map { case (iNoisy, qNoisy) => // Constrain to voltage range 0 -> 0.9
+      (math.max(0, math.min(0.9, iNoisy)), math.max(0, math.min(0.9, qNoisy)))
     }
 
     val f = Figure()
     val p = f.subplot(0)
-    p += plot(Seq.tabulate(100)(i => i), cleanSignal.map { case (i, q) => i }.take(100))
-    p += plot(Seq.tabulate(100)(i => i), noisySignal.map { case (i, q) => i }.take(100), colorcode = "r")
-    f.saveas(s"SignalPlot${noiseAmplitude}.png")
+    p += plot(Seq.tabulate(100)(i => i), cleanSignal.map { case (i, _) => i }.take(100))
+    p += plot(Seq.tabulate(100)(i => i), noisySignal.map { case (i, _) => i }.take(100))
+    p += plot(Seq.tabulate(100)(i => i), cleanSignal.map { case (_, q) => q }.take(100))
+    p += plot(Seq.tabulate(100)(i => i), noisySignal.map { case (_, q) => q }.take(100))
+    f.saveas(s"SignalPlot${snr}.png")s
 
-    noisySignal
+    analogToDigital(noisySignal) // Quantize clipped noisy signal
   }
 
   def crc(bits: Seq[Int]): Seq[Int] = {

@@ -134,10 +134,10 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val trim_g6 = RegInit(0.U(8.W))
   val trim_g7 = RegInit(0.U(8.W))
 
-  val mixer_r0 = RegInit(0.U(4.W))
-  val mixer_r1 = RegInit(0.U(4.W))
-  val mixer_r2 = RegInit(0.U(4.W))
-  val mixer_r3 = RegInit(0.U(4.W))
+  val mixer_r0 = RegInit(3.U(4.W))
+  val mixer_r1 = RegInit(3.U(4.W))
+  val mixer_r2 = RegInit(3.U(4.W))
+  val mixer_r3 = RegInit(3.U(4.W))
 
   val i_vgaAtten = RegInit(0.U(10.W))
   val i_vgaAtten_reset = RegInit(false.B)

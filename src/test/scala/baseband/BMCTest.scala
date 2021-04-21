@@ -43,7 +43,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
   val tests = 1
   val params = BLEBasebandModemParams()
   val beatBytes = 4
-/*
+
   it should "Pass a full baseband loop without whitening" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -339,7 +339,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       }
     }
   }
-*/
+
   it should "Properly receive data with random channel index" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)

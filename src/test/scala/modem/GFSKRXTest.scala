@@ -7,16 +7,16 @@ import chisel3.util._
 import collection.immutable.Seq
 import chiseltest._
 import chiseltest.experimental.TestOptionBuilder._
-import chiseltest.internal.{TreadleBackendAnnotation, VerilatorBackendAnnotation, WriteVcdAnnotation}
+import chiseltest.internal.{TreadleBackendAnnotation, WriteVcdAnnotation}
 import org.scalatest.flatspec.AnyFlatSpec
 import baseband.BLEBasebandModemParams
 import chisel3.experimental.FixedPoint
+import modem.TestUtility._
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
-import breeze.stats.distributions.Gaussian
 import breeze.plot._
 
 import verif._
@@ -100,16 +100,13 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
 
 
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
-/*
   it should "Determine SNR vs BER" in {
     val numberOfBits = 50
     val preamble = Seq(1,0,1,0,1,0,1,0)
 
-    val SNRvBER = Seq.tabulate(11)(i => {
-      val noiseAmplitude = i.toDouble / 100
-      val SNR = 1 / noiseAmplitude
+    val SNRvBER = Seq(0, 1, 5, 10, 12, 15, 20, 50, 100).map { SNR =>
       var BER = 2.0
-      println(s"Testing SNR of ${SNR}:")
+      println(s"Testing SNR of $SNR:")
 
       test(new GFSKRXTestModule(BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
         val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
@@ -119,7 +116,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
         val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
         val bits = Seq(0,0,0,0,0,0) ++ preamble ++ whiten(packet) ++ Seq(0,0,0,0,0,0,0)
-        val input = noisyTestWaveform(bits, noiseAmplitude = noiseAmplitude)
+        val input = noisyTestWaveform(bits, snr = SNR)
         val initialPhaseOffset = Random.nextInt(20)
         //c.clock.step(initialPhaseOffset) // random phase offset
 
@@ -136,11 +133,11 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       }
 
       (SNR, BER)
-    })
+    }
 
     println(SNRvBER)
   }
-*/
+
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
