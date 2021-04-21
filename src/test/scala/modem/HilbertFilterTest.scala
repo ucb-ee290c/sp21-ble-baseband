@@ -2,6 +2,7 @@ package modem
 
 import baseband.BLEBasebandModemParams
 import breeze.linalg.DenseVector
+import breeze.plot.{Figure, plot}
 import chisel3.UInt
 import chisel3._
 import chiseltest._
@@ -14,7 +15,9 @@ import breeze.signal.support.CanFilterLPHP
 import chisel3.experimental.FixedPoint
 import chisel3.util.Decoupled
 
+import scala.collection.immutable.Seq
 import scala.math
+import scala.util.Random
 
 class RoundTowardsZeroTestModule extends Module {
   val io = IO(new Bundle {
@@ -102,45 +105,61 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 
-  it should "Do something else" in {
+  it should "PASS Radio Frequency and Display Waveform" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
-      while (i < mock_input_I_mixed.length) {
-        c.io.in.i.bits.poke(mock_input_I_mixed(i).asUInt())
-        c.io.in.q.bits.poke(mock_input_Q_mixed(i).asUInt())
-        c.io.in.i.valid.poke((i < mock_input_I_mixed.length).asBool())
-        c.io.in.q.valid.poke((i < mock_input_I_mixed.length).asBool())
+      val numberOfBits = 20
+      val preamble = Seq(1,0,1,0,1,0,1,0)
+      val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ TestUtility.whiten(packet) ++ Seq(0,0,0,0,0,0,0)
+      val input = TestUtility.testWaveform(bits)
+      while (i < input.length) {
+        c.io.in.i.bits.poke(input(i)._1.asUInt())
+        c.io.in.q.bits.poke(input(i)._2.asUInt())
+        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.io.in.q.valid.poke((i < input.length).asBool())
         c.clock.step()
-       if (c.io.out.valid.peek().litToBoolean)
+        if (c.io.out.valid.peek().litToBoolean)
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
-      print("MIXED:\n")
+      print("Output:\n")
       print(arr)
-      assert(arr.max - arr.min > mock_input_I_mixed.max - mock_input_I_mixed.min)
+      val f = Figure()
+      val p = f.subplot(0)
+      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "b")
+      assert(true)
     }
   }
 
-  it should "Do something else again" in {
+  it should "REJECT IMAGE and Display Waveform" in {
     test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.out.ready.poke(1.B)
       var arr = Seq[BigInt]()
       var i = 0
-      while (i < mock_input_I_rf.length) {
-        c.io.in.i.bits.poke(mock_input_I_rf(i).asUInt())
-        c.io.in.q.bits.poke(mock_input_Q_rf(i).asUInt())
-        c.io.in.i.valid.poke((i < mock_input_I_rf.length).asBool())
-        c.io.in.q.valid.poke((i < mock_input_I_rf.length).asBool())
+      val numberOfBits = 20
+      val preamble = Seq(1,0,1,0,1,0,1,0)
+      val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ TestUtility.whiten(packet) ++ Seq(0,0,0,0,0,0,0)
+      val input = TestUtility.testWaveform(bits, TestUtility.F_IM)
+      while (i < input.length) {
+        c.io.in.i.bits.poke(input(i)._1.asUInt())
+        c.io.in.q.bits.poke(input(i)._2.asUInt())
+        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.io.in.q.valid.poke((i < input.length).asBool())
         c.clock.step()
-       if (c.io.out.valid.peek().litToBoolean)
+        if (c.io.out.valid.peek().litToBoolean)
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
-      print("RF ONLY:\n")
+      print("Output:\n")
       print(arr)
-      assert(arr.max - arr.min > mock_input_I_rf.max - mock_input_I_rf.min)
+      val f = Figure()
+      val p = f.subplot(0)
+      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "r")
+      assert(true)
     }
   }
 

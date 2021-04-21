@@ -97,7 +97,7 @@ class PacketAssembler extends Module {
   val white_data = Wire(UInt(1.W))
   val white_valid = Wire(Bool())
   val white_result = Wire(UInt(1.W))
-  val white_seed =  Cat(Reverse(io.constants.channelIndex),0.U(1.W))
+  val white_seed =  Cat(Reverse(io.constants.channelIndex), 1.U(1.W))
 
   // Handshake parameters
   val data_in_ready = Reg(Bool())
@@ -107,9 +107,6 @@ class PacketAssembler extends Module {
 
   io.in.data.ready := data_in_ready
   io.out.data.valid := data_out_valid
-
-  // Input data bits
-  //io.in.data.ready :=
 
   // Input control bits
   io.in.control.ready := state === s_idle

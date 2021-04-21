@@ -19,7 +19,7 @@ class Whitening extends Module {
   val inv = whitening_lfsr(0)
 
   when (io.init) {
-    whitening_lfsr := io.seed
+    whitening_lfsr := Reverse(io.seed)
   }.elsewhen (io.operand.fire()) {
     whitening_lfsr := Cat(inv, whitening_lfsr(6), whitening_lfsr(5), whitening_lfsr(4), whitening_lfsr(3)^inv, whitening_lfsr(2), whitening_lfsr(1))
   }

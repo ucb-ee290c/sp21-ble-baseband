@@ -346,6 +346,9 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
 
+      // Set the appropriate tuning parameters
+      c.io.tuning.control.imageRejectionOp.poke(0.B)
+      c.io.tuning.control.preambleDetectionThreshold.poke(140.U)
       for (i <- 0 until tests) {
         val channelIndex = 0
         val accessAddress = scala.util.Random.nextInt.abs
@@ -382,7 +385,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
             _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
         ))
         c.clock.step()
-        val length = 10
+        val length = 2
         val (packet, pdu) = TestUtility.packet(accessAddress, length)
         val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
         val input = TestUtility.testWaveform(bits)
@@ -392,11 +395,15 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
           c.io.analog.data.rx.q.data.poke(s._1.U(5.W))
           c.clock.step()
         }
+
+        val expectedBaseAddr = (addrInString.U.litValue + (length + 2) + beatBytes) & ~(beatBytes - 1)
         var outputBits = Seq[BigInt]()
         var outputLength = 0
         dmaWriteReqMonitor.monitoredTransactions
           .map(t => t.data)
           .foreach { o =>
+              //assert(o.addr.litValue == expectedBaseAddr + outputLength)
+            // TODO: MAKE SURE THE ADDRESSES MATCH
               outputLength = outputLength + o.totalBytes.litValue.toInt
               outputBits = outputBits ++ Seq.tabulate(o.totalBytes.litValue.toInt * 8) {i => (o.data.litValue >> i) & 0x1}
           }
