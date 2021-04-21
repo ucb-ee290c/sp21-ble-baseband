@@ -8,7 +8,12 @@ import BasebandISA._
 import ee290cdma._
 import modem._
 
+object TXChainControllerInputCommands {
+  val START = 0.U
+  val DEBUG = 1.U
+}
 class TXChainControllerCommand(val addrBits: Int, val maxReadSize: Int) extends Bundle {
+  val command = UInt(1.W)
   val addr = UInt(addrBits.W)
   val totalBytes = UInt(log2Ceil(maxReadSize).W)
 }
@@ -112,7 +117,10 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 
           dmaReqValid := true.B
           assemblerReqValid := true.B
-          modemTXReqValid := true.B
+
+          when (io.control.cmd.bits.command === TXChainControllerInputCommands.START) {
+            modemTXReqValid := true.B
+          }
 
           state := s_working
         }.otherwise {
@@ -158,7 +166,7 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
         modemTXDone := true.B
       }
 
-      when(assemblerDone && modemTXDone) {
+      when(assemblerDone && (modemTXDone | cmd.command === TXChainControllerInputCommands.DEBUG)) {
         // Confirm that all regs get reset to false
         assemblerReqValid := false.B
         assemblerDone := false.B
@@ -323,10 +331,9 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
           state := s_working
         }.otherwise {
-          error := true.B
           errorMessageValid := true.B
           errorMessageBits := ERROR_MESSAGE(RX_INVALID_ADDR)
-          gotoIdle()
+          state := s_error
         }
       }
     }
@@ -344,21 +351,23 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
         disassemblerReqValid := false.B
       }
 
-      when(io.disassemblerControl.out.busy) { // Point of no return for this command
-        rxStart := true.B
-        disassemblerBusy := true.B
-      }.elsewhen(io.control.cmd.fire() & io.control.cmd.bits.command === PDAControlInputCommands.EXIT_CMD) {
-        // TODO: Send finish message with length = 0
-        rxFinish := true.B
+      when(!disassemblerBusy) {
+        when(io.disassemblerControl.out.busy) { // Point of no return for this command
+          rxStart := true.B
+          disassemblerBusy := true.B
+        }.elsewhen(io.control.cmd.fire() & io.control.cmd.bits.command === PDAControlInputCommands.EXIT_CMD) {
+          // TODO: Send finish message with length = 0
+          rxFinish := true.B
 
-        disassemblerReqValid := true.B
-        cmd := io.control.cmd.bits
+          disassemblerReqValid := true.B
+          cmd := io.control.cmd.bits
 
-        // Confirm that all other regs get reset to false
-        disassemblerBusy := false.B
-        disassemblerDone := false.B
+          // Confirm that all other regs get reset to false
+          disassemblerBusy := false.B
+          disassemblerDone := false.B
 
-        state := s_idle
+          state := s_idle
+        }
       }
 
       when(io.disassemblerControl.out.done) {
@@ -520,6 +529,8 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
             txControllerCmdValid := true.B
             txControllerCmd.totalBytes := io.cmd.bits.inst.data
             txControllerCmd.addr := io.cmd.bits.additionalData
+            txControllerCmd.command := TXChainControllerInputCommands.START
+
             state := s_tx
           }
           is (BasebandISA.RECEIVE_START_CMD) {
@@ -534,6 +545,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
             txControllerCmdValid := true.B
             txControllerCmd.totalBytes := io.cmd.bits.inst.data
             txControllerCmd.addr := io.cmd.bits.additionalData
+            txControllerCmd.command := TXChainControllerInputCommands.DEBUG
 
             rxControllerCmdValid := true.B
             rxControllerCmd.command := PDAControlInputCommands.DEBUG_CMD

@@ -11,6 +11,7 @@ object PDAControlInputCommands {
   val DEBUG_CMD = 1.U
   val EXIT_CMD = 2.U
 }
+
 class PDAControlInputBundle extends Bundle {
   val command = UInt(2.W)
   val aa = UInt(32.W)
