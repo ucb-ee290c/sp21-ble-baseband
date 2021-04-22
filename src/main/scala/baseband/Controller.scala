@@ -242,8 +242,6 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
   val baseAddrValid = RegInit(false.B)
 
   val disassemblerReqValid = RegInit(false.B)
-  val disassemblerDone = RegInit(false.B)
-  val disassemblerLength = RegInit(0.U(8.W))
   val disassemblerBusy = RegInit(false.B)
 
   val modemRXEnable = RegInit(false.B)
@@ -266,7 +264,6 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
     modemRXEnable := false.B
     disassemblerBusy := false.B
     disassemblerReqValid := false.B
-    disassemblerDone := false.B
 
     state := s_idle
   }
@@ -319,7 +316,6 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
   // Main FSM
   switch(state) {
     is(s_idle) {
-      disassemblerLength := 0.U
       disassemblerReqValid := false.B
       modemRXEnable := false.B
 
@@ -364,7 +360,6 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
           // Confirm that all other regs get reset to false
           disassemblerBusy := false.B
-          disassemblerDone := false.B
 
           state := s_idle
         }
@@ -372,9 +367,7 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
       when(io.disassemblerControl.out.done) {
         modemRXEnable := false.B
-        disassemblerDone := true.B
         disassemblerBusy := false.B
-        disassemblerLength := io.disassemblerControl.out.length
 
         when (io.disassemblerControl.out.flag_aa | io.disassemblerControl.out.flag_crc) {
           errorMessageValid := true.B
@@ -388,7 +381,7 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
           state := s_error
         }.otherwise {
           rxFinishMessageValid := true.B
-          rxFinishMessageBits := RX_FINISH_MESSAGE(disassemblerLength)
+          rxFinishMessageBits := RX_FINISH_MESSAGE(io.disassemblerControl.out.length)
           state := s_rxFinish
         }
       }
