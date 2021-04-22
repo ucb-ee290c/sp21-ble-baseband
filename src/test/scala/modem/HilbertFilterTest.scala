@@ -127,9 +127,9 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       }
       print("Output:\n")
       print(arr)
-      val f = Figure()
+     /* val f = Figure()
       val p = f.subplot(0)
-      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "b")
+      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "b")*/
       assert(true)
     }
   }
@@ -156,9 +156,10 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       }
       print("Output:\n")
       print(arr)
+      /*
       val f = Figure()
       val p = f.subplot(0)
-      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "r")
+      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "r")*/
       assert(true)
     }
   }
