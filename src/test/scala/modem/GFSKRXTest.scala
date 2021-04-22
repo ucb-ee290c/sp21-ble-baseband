@@ -55,7 +55,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
     val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
 
-    val cleanSignal = RFtoIF(FIR(bitstream(bits), gaussian_weights), F_RF)
+    val cleanSignal = fastIF(FIR(bitstream(bits), gaussian_weights))
 
     //val initialPhaseOffset = Random.nextInt(20)
 
