@@ -6,7 +6,6 @@ import chisel3.experimental._
 import freechips.rocketchip.config.Config
 import freechips.rocketchip.diplomacy.{InModuleBody, LazyModule}
 import freechips.rocketchip.subsystem.BaseSubsystem
-import sifive.blocks.devices.timer._
 
 trait CanHavePeripheryBLEBasebandModem { this: BaseSubsystem =>
   val baseband = p(BLEBasebandModemKey).map { params =>
@@ -27,7 +26,6 @@ trait CanHavePeripheryBLEBasebandModem { this: BaseSubsystem =>
 
 class WithBLEBasebandModem(params: BLEBasebandModemParams = BLEBasebandModemParams()) extends Config((site, here, up) => {
   case BLEBasebandModemKey => Some(params)
-  case PeripheryTimerKey => Seq(TimerParams(address = params.address + 0x1000))
 })
 
 /* Note: The following are commented out as they rely on importing chipyard, which no
