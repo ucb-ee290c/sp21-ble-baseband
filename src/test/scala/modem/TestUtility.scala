@@ -17,6 +17,7 @@ object TestUtility {
   val F_LO = F_RF - F_IF
   val F_IM = F_LO - F_IF
   val analog_F_sample = (F_LO * 2 + F_IF + 0.25 * MHz) * 2
+  val low_F_sample = 20*MHz
   val time_interval = 0.0000001
   val symbol_time = 0.000001
   val digital_clock_F = 20 * MHz
@@ -89,8 +90,19 @@ object TestUtility {
     val Q = timeSteps.indices.map {i => signal(i) * math.sin(2 * math.Pi * F_LO * timeSteps(i))}
     centerInSupplies(analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz))
   }
-  def analogToDigital(in: Seq[(Double, Double)], adcBits: Int = 5): Seq[(Int, Int)] = {
-    val sampled = in.zipWithIndex.collect {case (e,i) if (i % (analog_F_sample / digital_clock_F).toInt) == 0 => e}
+
+  def fastIF(in: Seq[Double], modulationIndex: Double = 0.5): Seq[(Double, Double)] = {
+    val timeSteps = Seq.tabulate[Double]((low_F_sample * symbol_time * (in.length / 10)).toInt){_.toDouble / low_F_sample}
+    val modulationFrequencyDeviation = modulationIndex / (2 * symbol_time)
+    println("Modulation Index: ", modulationIndex, "Modulation Frequency Deviation: ", modulationFrequencyDeviation)
+    val frequencies = timeSteps.map {t => F_IF + in((t / (symbol_time / 10)).floor.toInt) * modulationFrequencyDeviation }
+    val phases = frequencies.map{var s: Double = 0.0; d => {s += d; 2 * math.Pi * s / low_F_sample}}
+    centerInSupplies(timeSteps.indices.map {i => 0.5 * math.cos(phases(i))} zip
+      timeSteps.indices.map {i => - 0.5 * math.sin(phases(i))})
+  }
+
+  def analogToDigital(in: Seq[(Double, Double)], f_sample: Double, adcBits: Int = 8): Seq[(Int, Int)] = {
+    val sampled = in.zipWithIndex.collect {case (e,i) if (i % (f_sample / digital_clock_F).toInt) == 0 => e}
 
     val range = math.pow(2, adcBits) - 1
     val scaleWeight = range / 0.9
@@ -101,13 +113,15 @@ object TestUtility {
   def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
     val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
     val modulationIndex = 0.45 + Random.nextDouble / 10
-    analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency, modulationIndex = modulationIndex))
+    val testInput = analogToDigital(fastIF(FIR(bitstream(bits), gaussian_weights), modulationIndex = modulationIndex), low_F_sample)
+    println("DONE GENERATING TEST INPUT")
+    testInput
   }
 
   def noisyTestWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, snr: Double = 10.0): Seq[(Int, Int)] = {
     val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
     val cleanSignal = RFtoIF(FIR(bitstream(bits), gaussian_weights), centerFrequency)
-
+    // TODO: USE fastIF instead
     val noiseGen = Gaussian(0, 0.45 / Math.pow(10, snr / 20))
 
     val noise = noiseGen.sample(cleanSignal.length).zip(noiseGen.sample(cleanSignal.length))
@@ -127,8 +141,7 @@ object TestUtility {
 //    p += plot(Seq.tabulate(range)(i => i.toDouble), cleanSignal.map { case (_, q) => q }.take(range))
 //    p += plot(Seq.tabulate(range)(i => i.toDouble), noisySignal.map { case (_, q) => q }.take(range))
 //    f.saveas(s"SignalPlot${snr}.png")
-
-    analogToDigital(noisySignal) // Quantize clipped noisy signal
+    analogToDigital(noisySignal, low_F_sample) // Quantize clipped noisy signal
   }
 
   def addNoiseToCleanSignal(cleanSignal: Seq[(Double, Double)], snr: Double = 10.0): Seq[(Int, Int)] = {
@@ -142,7 +155,7 @@ object TestUtility {
       (math.max(0, math.min(0.9, iNoisy)), math.max(0, math.min(0.9, qNoisy)))
     }
 
-    analogToDigital(noisySignal) // Quantize clipped noisy signal
+    analogToDigital(noisySignal, low_F_sample) // Quantize clipped noisy signal
   }
 
   def crc(bits: Seq[Int]): Seq[Int] = {

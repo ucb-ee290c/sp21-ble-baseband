@@ -47,6 +47,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
 }
 
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
+
   it should "Determine SNR vs BER" in {
     val numberOfBytes = 256
 
@@ -74,8 +75,8 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
         //c.clock.step(initialPhaseOffset) // random phase offset
 
-        inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
-        inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
+        inDriverI.push(input.map(p => new DecoupledTX(UInt(8.W)).tx(p._1.U(8.W))))
+        inDriverQ.push(input.map(p => new DecoupledTX(UInt(8.W)).tx(p._2.U(8.W))))
         c.clock.step(bits.size * 20)
 
         val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}
@@ -105,15 +106,15 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
       val accessAddress = scala.util.Random.nextInt.abs
 
-      val numberOfBytes = 4
+      val numberOfBytes = 256
       val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
       val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
       val input = TestUtility.testWaveform(bits)
       val initialPhaseOffset = Random.nextInt(20)
       c.io.control.aaLSB.poke((accessAddress & 0x1).U)
       c.clock.step(initialPhaseOffset) // random phase offset
-      inDriverI.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._1.U(5.W))))
-      inDriverQ.push(input.map(p => new DecoupledTX(UInt(5.W)).tx(p._2.U(5.W))))
+      inDriverI.push(input.map(p => new DecoupledTX(UInt(8.W)).tx(p._1.U(8.W))))
+      inDriverQ.push(input.map(p => new DecoupledTX(UInt(8.W)).tx(p._2.U(8.W))))
       c.clock.step(bits.size * 20)
 
       val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}

@@ -89,10 +89,10 @@ class GFSKDemodulationTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.digital.outF0.ready.poke(1.B)
       c.io.digital.outF1.ready.poke(1.B)
       for (i <- input) {
-        c.io.analog.i.bits.poke((i._1).U(5.W))
+        c.io.analog.i.bits.poke((i._1).U(8.W))
         c.io.analog.i.valid.poke(1.B)
 
-        c.io.analog.q.bits.poke((i._2).U(5.W))
+        c.io.analog.q.bits.poke((i._2).U(8.W))
         c.io.analog.q.valid.poke(1.B)
 
         c.clock.step()
