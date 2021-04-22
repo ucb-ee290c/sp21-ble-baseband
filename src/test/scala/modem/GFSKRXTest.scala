@@ -47,7 +47,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
 }
 
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
-
+/*
   it should "Determine SNR vs BER" in {
     val numberOfBytes = 256
 
@@ -97,7 +97,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
     println(SNRvBER)
   }
-
+*/
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
@@ -106,7 +106,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
       val accessAddress = scala.util.Random.nextInt.abs
 
-      val numberOfBytes = 256
+      val numberOfBytes = 100
       val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
       val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
       val input = TestUtility.testWaveform(bits)

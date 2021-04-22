@@ -24,7 +24,7 @@ class ModemTest extends AnyFlatSpec with ChiselScalatestTester {
       val numberOfBits = 50
       val preamble = Seq(1,0,1,0,1,0,1,0)
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
-      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ TestUtility.whiten(packet) ++ Seq(0,0,0,0,0,0,0)
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ TestUtility.whiten(packet, 0) ++ Seq(0,0,0,0,0,0,0)
       val input = TestUtility.testWaveform(bits)
       val initialPhaseOffset = Random.nextInt(20)
       var retrieved = Seq[Int]()

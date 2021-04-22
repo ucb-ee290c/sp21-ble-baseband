@@ -31,23 +31,32 @@ object TestUtility {
     filterForward(b, a, signal)
   }
 
-  def whiten(bits: Iterable[Int]): List[Int] = {
-    var lfsr = Seq(1, 0, 0, 0, 0, 0, 0)
-    def whitener(b: Int): Int = {
-      val last = lfsr.last
-      lfsr = lfsr.indices.map { i =>
+  def whitener(lfsr: Seq[Int]): (Seq[Int],Int) = {
+    val last = lfsr.last
+    (lfsr.indices.map { i =>
 
-        if (i == 0) {
-          lfsr.last
-        } else if (i == 4) {
-          lfsr.last ^ lfsr(3)
-        } else {
-          lfsr(i - 1)
-        }
+      if (i == 0) {
+        lfsr.last
+      } else if (i == 4) {
+        lfsr.last ^ lfsr(3)
+      } else {
+        lfsr(i - 1)
       }
-      last ^ b
-    }
-    bits.toList.map{whitener(_)}
+    },
+    last)
+  }
+
+  def getWhiteningBits(n: Int, channelIndex: Int): List[Int] = {
+    var lfsr = (Seq.tabulate(6){i => (channelIndex >> i) & 0x1} ++ Seq(1)).reverse
+
+    List.tabulate(n){_ =>
+      val res = whitener(lfsr)
+      lfsr = res._1
+      res._2}
+  }
+
+  def whiten(bits: Iterable[Int], channelIndex: Int): List[Int] = {
+    getWhiteningBits(bits.size, channelIndex).zip(bits).map { p => p._1 ^ p._2}
   }
 
   val gaussian_weights = Seq(1.66272941385205e-08, 1.31062698399579e-07, 8.95979722260093e-07, 5.31225368476001e-06, 2.73162439119005e-05, 0.000121821714511972, 0.000471183401324158, 0.00158058118651170, 0.00459838345240388, 0.0116025943557647, 0.0253902270288187, 0.0481880785252652, 0.0793184437320263, 0.113232294984428, 0.140193534368681, 0.150538370165906, 0.140193534368681, 0.113232294984428, 0.0793184437320263, 0.0481880785252652, 0.0253902270288187, 0.0116025943557647, 0.00459838345240388, 0.00158058118651170, 0.000471183401324158, 0.000121821714511972, 2.73162439119005e-05, 5.31225368476001e-06, 8.95979722260093e-07, 1.31062698399579e-07, 1.66272941385205e-08)
@@ -194,6 +203,6 @@ object TestUtility {
     val pduLength = bytes
     val header = Seq.tabulate(8){i => 0} ++ Seq.tabulate(8){i => (pduLength >> i) & 0x1}
     val pdu = header ++ Seq.tabulate(pduLength * 8){_ => Random.nextInt(2)}
-    (preamble ++ accessAddress ++ whiten(pdu ++ crc(pdu)), pdu)
+    (preamble ++ accessAddress ++ whiten(pdu ++ crc(pdu), 0), pdu)
   }
 }
