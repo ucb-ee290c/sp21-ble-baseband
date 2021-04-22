@@ -15,7 +15,7 @@ case class BLEBasebandModemParams (
   address: BigInt = 0x8000,
   paddrBits: Int = 32,
   maxReadSize: Int = 258,
-  adcBits: Int = 5, // TODO: what is this value actually going to be?
+  adcBits: Int = 8,
   adcQueueDepth: Int = 2,
   cmdQueueDepth: Int = 4,
   modemQueueDepth: Int = 256,
@@ -88,7 +88,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val io: BLEBasebandModemFrontendBundle
 
   // Assertions for RegMap Parameter Correctness
-  assert(params.adcBits <= 8, s"ADC bits set to ${params.adcBits}, must than or equal to 8")
+  assert(params.adcBits <= 8, s"ADC bits set to ${params.adcBits}, must less than or equal to 8")
 
   // Instruction from processor
   val inst = Wire(new DecoupledIO(UInt(32.W)))
