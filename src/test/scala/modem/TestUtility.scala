@@ -1,5 +1,6 @@
 package modem
 
+import baseband.BLEBasebandModemParams
 import breeze.plot.{Figure, plot}
 import breeze.stats.distributions.Gaussian
 import net.sparja.syto.filter.{TransferFunctionBuilder, filterForward}
@@ -110,7 +111,7 @@ object TestUtility {
       timeSteps.indices.map {i => - 0.5 * math.sin(phases(i))})
   }
 
-  def analogToDigital(in: Seq[(Double, Double)], f_sample: Double, adcBits: Int = 8): Seq[(Int, Int)] = {
+  def analogToDigital(in: Seq[(Double, Double)], f_sample: Double, adcBits: Int = BLEBasebandModemParams().adcBits): Seq[(Int, Int)] = {
     val sampled = in.zipWithIndex.collect {case (e,i) if (i % (f_sample / digital_clock_F).toInt) == 0 => e}
 
     val range = math.pow(2, adcBits) - 1

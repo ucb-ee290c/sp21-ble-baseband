@@ -49,7 +49,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 /*
   it should "Determine SNR vs BER" in {
-    val numberOfBytes = 256
+    val numberOfBytes = 50
 
     val accessAddress = scala.util.Random.nextInt.abs
     val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
@@ -106,9 +106,20 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
       val accessAddress = scala.util.Random.nextInt.abs
 
-      val numberOfBytes = 100
+      val numberOfBytes = 1
       val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
       val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
+
+      val fast = analogToDigital(fastIF(FIR(bitstream(bits), gaussian_weights)), TestUtility.low_F_sample)
+      val slow = analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), F_RF), TestUtility.analog_F_sample)
+
+      val f = Figure()
+      val p = f.subplot(0)
+      p += plot(Seq.tabulate(fast.size)(i => i).take(500), fast.map{_._1}.take(500), colorcode = "r")
+      p += plot(Seq.tabulate(slow.size)(i => i).take(500), slow.map{_._1}.take(500), colorcode = "b")
+
+
+
       val input = TestUtility.testWaveform(bits)
       val initialPhaseOffset = Random.nextInt(20)
       c.io.control.aaLSB.poke((accessAddress & 0x1).U)
