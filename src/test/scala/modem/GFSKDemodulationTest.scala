@@ -28,8 +28,8 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
       val q = Flipped(Decoupled(UInt(params.adcBits.W)))
     }
     val digital = new Bundle {
-      val outF0 = Decoupled(UInt(12.W))
-      val outF1 = Decoupled(UInt(12.W))
+      val outF0 = Decoupled(UInt(15.W))
+      val outF1 = Decoupled(UInt(15.W))
     }
   })
 
@@ -42,10 +42,10 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
 
-  val bandpassF0 = Module( new GenericFIR(FixedPoint(7.W, 0.BP), FixedPoint(20.W, 11.BP),
+  val bandpassF0 = Module( new GenericFIR(FixedPoint(10.W, 0.BP), FixedPoint(23.W, 11.BP),
     FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
 
-  val bandpassF1 = Module( new GenericFIR(FixedPoint(7.W, 0.BP), FixedPoint(20.W, 11.BP),
+  val bandpassF1 = Module( new GenericFIR(FixedPoint(10.W, 0.BP), FixedPoint(23.W, 11.BP),
     FIRCoefficients.GFSKRX_Bandpass_F1.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
 
   imageRejection.io.out.ready := bandpassF0.io.in.ready && bandpassF1.io.in.ready
@@ -56,8 +56,8 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
   bandpassF1.io.in.bits.data := imageRejection.io.out.bits.asSInt().asFixedPoint(0.BP)
   bandpassF1.io.in.valid := imageRejection.io.out.valid
 
-  val envelopeDetectorF0 = Module( new EnvelopeDetector(9) )
-  val envelopeDetectorF1 = Module( new EnvelopeDetector(9) )
+  val envelopeDetectorF0 = Module( new EnvelopeDetector(12) )
+  val envelopeDetectorF1 = Module( new EnvelopeDetector(12) )
 
   envelopeDetectorF0.io.in.valid := bandpassF0.io.out.valid
   envelopeDetectorF0.io.in.bits := Utility.roundTowardsZero(bandpassF0.io.out.bits.data)

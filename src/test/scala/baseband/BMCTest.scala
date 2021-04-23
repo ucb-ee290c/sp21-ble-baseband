@@ -43,7 +43,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
   val tests = 1
   val params = BLEBasebandModemParams()
   val beatBytes = 4
-
+/*
   it should "Pass a full baseband loop without whitening" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -339,7 +339,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       }
     }
   }
-
+*/
   it should "Properly receive data with random channel index" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -385,14 +385,14 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
             _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
         ))
         c.clock.step()
-        val length = 2
+        val length = 255
         val (packet, pdu) = TestUtility.packet(accessAddress, length)
         val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
         val input = TestUtility.testWaveform(bits)
 
         for (s <- input) {
-          c.io.analog.data.rx.i.data.poke(s._1.U(5.W))
-          c.io.analog.data.rx.q.data.poke(s._1.U(5.W))
+          c.io.analog.data.rx.i.data.poke(s._1.U(8.W))
+          c.io.analog.data.rx.q.data.poke(s._1.U(8.W))
           c.clock.step()
         }
 
