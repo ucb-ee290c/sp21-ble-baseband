@@ -47,9 +47,36 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
 }
 
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
+  it should "Plot slow vs fast data generation" in {
+    val numberOfBytes = 4
+
+    val accessAddress = scala.util.Random.nextInt.abs
+    val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
+    val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
+
+    val slowCleanSignal = RFtoIF(FIR(bitstream(bits), gaussian_weights), F_RF)
+    val fastCleanSignal = fastIF(FIR(bitstream(bits), gaussian_weights))
+
+    val f0 = Figure()
+    val p0 = f0.subplot(0)
+    val range = 500
+    p0 += plot(Seq.tabulate(range)(i => i), analogToDigital(slowCleanSignal, analog_F_sample).map { case (i, _) => i }.take(range))
+    p0 += plot(Seq.tabulate(range)(i => i), analogToDigital(fastCleanSignal, low_F_sample).map { case (i, _) => i }.take(range), colorcode = "red")
+
+    Seq(0, 1, 2, 3, 4).map { SNR => // , 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 50, 100
+      val slowNoisySignal = addNoiseToCleanSignal(slowCleanSignal, SNR, analog_F_sample)
+      val fastNoisySignal = addNoiseToCleanSignal(fastCleanSignal, SNR, low_F_sample)
+
+      val f = Figure()
+      val p = f.subplot(0)
+      val range = 100
+      p += plot(Seq.tabulate(range)(i => i), slowNoisySignal.map { case (i, _) => i }.take(range))
+      p += plot(Seq.tabulate(range)(i => i), fastNoisySignal.map { case (i, _) => i }.take(range), colorcode = "red")
+    }
+  }
 
   it should "Determine SNR vs BER" in {
-    val numberOfBytes = 256
+    val numberOfBytes = 10
 
     val accessAddress = scala.util.Random.nextInt.abs
     val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
@@ -69,7 +96,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
         val outDriver = new DecoupledDriverSlave(c.clock, c.io.digital.out)
         val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
 
-        val input = addNoiseToCleanSignal(cleanSignal, SNR)
+        val input = addNoiseToCleanSignal(cleanSignal, SNR, low_F_sample)
 
         c.io.control.aaLSB.poke((accessAddress & 0x1).U)
 
@@ -85,8 +112,11 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
         println(retrieved.length)
         println(expected.length)
 
+        println(retrieved)
+        println(expected)
+
         if (retrieved.length > 0) {
-          BER = 1.0 - ((expected.zip(retrieved).count { case (observed, expected) => observed == expected }).toDouble / expected.length)
+          BER = ((expected.zip(retrieved).count { case (observed, expected) => observed != expected }).toDouble / math.min(expected.length, retrieved.length))
         }
 
         println((SNR, BER))

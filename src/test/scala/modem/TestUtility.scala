@@ -144,7 +144,7 @@ object TestUtility {
     analogToDigital(noisySignal, low_F_sample) // Quantize clipped noisy signal
   }
 
-  def addNoiseToCleanSignal(cleanSignal: Seq[(Double, Double)], snr: Double = 10.0): Seq[(Int, Int)] = {
+  def addNoiseToCleanSignal(cleanSignal: Seq[(Double, Double)], snr: Double = 10.0, f_sample: Double = low_F_sample): Seq[(Int, Int)] = {
     val noiseGen = Gaussian(0, 0.45 / Math.pow(10, snr / 20))
 
     val noise = noiseGen.sample(cleanSignal.length).zip(noiseGen.sample(cleanSignal.length))
@@ -155,7 +155,7 @@ object TestUtility {
       (math.max(0, math.min(0.9, iNoisy)), math.max(0, math.min(0.9, qNoisy)))
     }
 
-    analogToDigital(noisySignal, low_F_sample) // Quantize clipped noisy signal
+    analogToDigital(noisySignal, f_sample) // Quantize clipped noisy signal
   }
 
   def crc(bits: Seq[Int]): Seq[Int] = {
