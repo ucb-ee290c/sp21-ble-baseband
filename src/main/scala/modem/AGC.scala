@@ -39,7 +39,7 @@ class ACGMaxMinCell(dataBits: Int) extends Module {
 }
 
 class AGCControlIO(val params: BLEBasebandModemParams) extends Bundle {
-  val sampleWindow = UInt(log2Ceil(params.agcMaxWindow).W)
+  val sampleWindow = UInt(log2Ceil(params.agcMaxWindow+1).W)
   val idealPeakToPeak = UInt(params.adcBits.W)
   val gain = FixedPoint(8.W, 6.BP)
   val reset = Bool()

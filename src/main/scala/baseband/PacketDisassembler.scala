@@ -40,6 +40,7 @@ class PacketDisassemblerIO extends Bundle {
   val in = new PDAInputIO
   val out = new PDAOutputIO
   val constants = Input(new BasebandConstants)
+  val state = Output(UInt(log2Ceil(7+1).W))
 }
 
 class PacketDisassembler extends Module {
@@ -73,6 +74,8 @@ class PacketDisassembler extends Module {
 
   val s_idle :: s_preamble :: s_preamble_debug :: s_aa :: s_pdu_header :: s_pdu_payload :: s_crc :: Nil = Enum(7)
   val state = RegInit(s_idle)
+
+  io.state := state
 
   val aa = Reg(UInt(32.W))
 

@@ -86,6 +86,10 @@ class BasebandIO(val addrBits: Int, val beatBytes: Int) extends Bundle {
       val preambleDetected = Input(Bool())
     }
   }
+  val state = new Bundle {
+    val assemblerState = Output(UInt(log2Ceil(6+1).W))
+    val disassemblerState = Output(UInt(log2Ceil(7+1).W))
+  }
 }
 
 class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
@@ -127,4 +131,7 @@ class Baseband(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   io.modem.digital.tx <> postAssemblerLoopback.io.right.out
   postAssemblerLoopback.io.right.in <> io.modem.digital.rx
   disassembler.io.in.data <> postAssemblerLoopback.io.left.out
+
+  io.state.assemblerState := assembler.io.state
+  io.state.disassemblerState := disassembler.io.state
 }

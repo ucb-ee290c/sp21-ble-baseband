@@ -15,7 +15,7 @@ object TXChainControllerInputCommands {
 class TXChainControllerCommand(val addrBits: Int, val maxReadSize: Int) extends Bundle {
   val command = UInt(1.W)
   val addr = UInt(addrBits.W)
-  val totalBytes = UInt(log2Ceil(maxReadSize).W)
+  val totalBytes = UInt(log2Ceil(maxReadSize+1).W)
 }
 
 class TXChainControllerControlIO(addrBits: Int, maxReadSize: Int) extends Bundle {
@@ -38,6 +38,7 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
     val constants = Input(new BasebandConstants)
     val control = new TXChainControllerControlIO(params.paddrBits, params.maxReadSize)
     val messages = new BLEBasebandModemMessagesIO
+    val state = Output(UInt(log2Ceil(3+1).W))
   })
 
   val s_idle :: s_working :: s_error :: Nil = Enum(3)
@@ -61,6 +62,9 @@ class TXChainController(params: BLEBasebandModemParams) extends Module {
 
   val errorMessageValid = RegInit(false.B)
   val errorMessageBits = RegInit(0.U(32.W))
+
+  // State IO
+  io.state := state
 
   // Control IO
   io.control.cmd.ready := io.assemblerControl.in.ready & io.dma.readReq.ready & state === s_idle
@@ -231,6 +235,7 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
     val constants = Input(new BasebandConstants)
     val control = new RXChainControllerControlIO(params.paddrBits)
     val messages = new BLEBasebandModemMessagesIO
+    val state = Output(UInt(log2Ceil(4+1).W))
   })
 
   val s_idle :: s_working :: s_error :: s_rxFinish :: Nil = Enum(4)
@@ -267,6 +272,9 @@ class RXChainController(params: BLEBasebandModemParams) extends Module {
 
     state := s_idle
   }
+
+  // State IO
+  io.state := state
 
   // Control IO
   io.control.cmd.ready := state === s_idle | state === s_working
@@ -423,6 +431,11 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
     }
     val modemControl = Flipped(new GFSKModemControlIO(params))
     val messages = new BLEBasebandModemMessagesIO
+    val state = new Bundle {
+      val rxControllerState = Output(UInt(log2Ceil(4+1).W))
+      val txControllerState = Output(UInt(log2Ceil(3+1).W))
+      val mainControllerState = Output(UInt(log2Ceil(4+1).W))
+    }
   })
 
   val constants = RegInit(new BasebandConstants, WireInit(new BasebandConstants().Lit(
@@ -480,6 +493,10 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   io.analog.offChipMode.rx := state === s_rx
   io.analog.offChipMode.tx := state === s_tx
 
+  // State IO
+  io.state.rxControllerState := rxController.io.state
+  io.state.txControllerState := txController.io.state
+  io.state.mainControllerState := state
   // Interrupts
   io.interrupt.txError := txController.io.interrupt.error
   io.interrupt.txFinish := txController.io.interrupt.txFinish

@@ -9,7 +9,7 @@ class PreambleDetector extends Module {
     val control = Input(new Bundle {
       val firstBit = UInt(1.W)
       val reset = Input(Bool())
-      val threshold = UInt(log2Ceil(20 * 8 + 1).W) // TODO, parameterize this
+      val threshold = UInt(8.W) // TODO, parameterize this
     })
     val detected = Output(Bool())
   })
@@ -32,7 +32,7 @@ class PreambleCorrelator extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(1.W))
     val firstBit = Input(UInt(1.W))
-    val matches = Output(UInt(log2Ceil(20 * 8 + 1).W))
+    val matches = Output(UInt(8.W))
   })
 
   val cells = Seq.tabulate(8){ i => Seq.tabulate(20){_ => i} }.reverse.flatten.map {i => (i % 2 == 0, Module(new CorrelatorCell).io)}

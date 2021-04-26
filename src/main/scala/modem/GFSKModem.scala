@@ -53,7 +53,7 @@ class GFSKModemTuningControlIO(val params: BLEBasebandModemParams) extends Bundl
     }
   }
   val imageRejectionOp = Bool()
-  val preambleDetectionThreshold = UInt(log2Ceil(20 * 8 + 1).W)
+  val preambleDetectionThreshold = UInt(8.W)
   val debug = new Bundle {
     val enabled = Bool()
   }
@@ -153,6 +153,9 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
       }
       val control = Input(new GFSKModemTuningControlIO(params))
     }
+    val state = new Bundle {
+      val txState = Output(UInt(log2Ceil(2+1).W))
+    }
   })
 
   val modemLUTs = Reg(new GFSKModemLUTs)
@@ -189,6 +192,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
 
   val tx = Module(new GFSKTX(params))
   tx.io.control <> io.control.tx
+  io.state.txState := tx.io.state
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue

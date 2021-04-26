@@ -113,13 +113,11 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.back.lutCmd.valid := lutCmd.valid
 
   // Status regs
-  val status0 = RegInit(0.U(32.W))
   val status1 = RegInit(0.U(32.W))
   val status2 = RegInit(0.U(32.W))
   val status3 = RegInit(0.U(32.W))
   val status4 = RegInit(0.U(32.W))
 
-  status0 := io.back.status.status0
   status1 := io.back.status.status1
   status2 := io.back.status.status2
   status3 := io.back.status.status3
@@ -143,7 +141,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val i_vgaAtten = RegInit(0.U(10.W))
   val i_vgaAtten_reset = RegInit(false.B)
   val i_vgaAtten_useAGC = RegInit(false.B)
-  val i_vgaAtten_sampleWindow = RegInit(1.U(log2Ceil(params.agcMaxWindow).W))
+  val i_vgaAtten_sampleWindow = RegInit(1.U(log2Ceil(params.agcMaxWindow+1).W))
   val i_vgaAtten_idealPeakToPeak = RegInit(math.pow(2, params.adcBits - 1).toInt.U(params.adcBits.W)) // TODO: Verify initial value
   val i_vgaAtten_gain = RegInit(32.U(8.W)) // TODO: Verify initial value
 
@@ -161,8 +159,8 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val q_vgaAtten = RegInit(0.U(10.W))
   val q_vgaAtten_reset = RegInit(false.B)
   val q_vgaAtten_useAGC = RegInit(false.B)
-  val q_vgaAtten_sampleWindow = RegInit(1.U(log2Ceil(params.agcMaxWindow).W))
-  val q_vgaAtten_idealPeakToPeak = RegInit(128.U(params.adcBits.W)) // TODO: Verify initial value
+  val q_vgaAtten_sampleWindow = RegInit(1.U(log2Ceil(params.agcMaxWindow+1).W))
+  val q_vgaAtten_idealPeakToPeak = RegInit((math.pow(2, params.adcBits - 1).toInt).U(params.adcBits.W))
   val q_vgaAtten_gain = RegInit(32.U(8.W)) // TODO: Verify initial value
 
   val q_filter_r0 = RegInit(0.U(4.W))
@@ -196,7 +194,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   /* Modem RX MMIO Parameters */
   val image_rejection_op = RegInit(false.B)
-  val preambleDetectionThreshold = RegInit(140.U(log2Ceil(20 * 8 + 1).W))
+  val preambleDetectionThreshold = RegInit(140.U(8.W))
 
   val rxErrorMessage = Wire(new DecoupledIO(UInt(32.W)))
   val rxFinishMessage = Wire(new DecoupledIO(UInt(32.W)))
@@ -288,7 +286,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   regmap( // TODO: IMPORTANT Reminder, there are two different interpretations of "Channel Index"
     0x00 -> Seq(RegField.w(32, inst)), // Command start
     0x04 -> Seq(RegField.w(32, additionalData)),
-    0x08 -> Seq(RegField.r(32, status0)), // Status start
+    0x08 -> Seq(RegField.r(32, io.back.status.status0)), // Status start
     0x0C -> Seq(RegField.r(32, status1)),
     0x10 -> Seq(RegField.r(32, status2)),
     0x14 -> Seq(RegField.r(32, status3)),
@@ -310,7 +308,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x26 -> Seq(RegField(10, i_vgaAtten)), // I VGA
     0x28 -> Seq(RegField(1, i_vgaAtten_reset)),
     0x29 -> Seq(RegField(1, i_vgaAtten_useAGC)),
-    0x2A -> Seq(RegField(log2Ceil(params.agcMaxWindow), i_vgaAtten_sampleWindow)),
+    0x2A -> Seq(RegField(log2Ceil(params.agcMaxWindow+1), i_vgaAtten_sampleWindow)),
     0x2B -> Seq(RegField(params.adcBits, i_vgaAtten_idealPeakToPeak)),
     0x2C -> Seq(RegField(8, i_vgaAtten_gain)),
     0x2D -> Seq( // I Filter
@@ -331,7 +329,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x32 -> Seq(RegField(10, q_vgaAtten)), // Q VGA
     0x34 -> Seq(RegField(1, q_vgaAtten_reset)),
     0x35 -> Seq(RegField(1, q_vgaAtten_useAGC)),
-    0x36 -> Seq(RegField(log2Ceil(params.agcMaxWindow), q_vgaAtten_sampleWindow)),
+    0x36 -> Seq(RegField(log2Ceil(params.agcMaxWindow+1), q_vgaAtten_sampleWindow)),
     0x37 -> Seq(RegField(params.adcBits, q_vgaAtten_idealPeakToPeak)),
     0x38 -> Seq(RegField(8, q_vgaAtten_gain)),
     0x39 -> Seq( // Q Filter
@@ -360,7 +358,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x46 -> Seq(RegField(6, dac_t2)),
     0x47 -> Seq(RegField(6, dac_t3)),
     0x48 -> Seq(RegField(1, image_rejection_op)), // Image Rejection Configuration
-    //0x49 -> Seq(RegField(1, enableDebug)),
+    0x49 -> Seq(RegField(8, preambleDetectionThreshold)), // Preamble Detection Configuration
     0x4A -> Seq(RegField(10, mux_dbg_in)), // Debug Configuration
     0x4C -> Seq(RegField(10, mux_dbg_out)),
     0x4E -> Seq(RegField(5, enable_rx_i)), // Manual enable values
@@ -368,8 +366,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
     0x54 -> Seq(RegField.r(32, rxErrorMessage)), // Interrupt Messages
     0x58 -> Seq(RegField.r(32, rxFinishMessage)),
-    0x5C -> Seq(RegField.r(32, txErrorMessage)),
-    0x60 -> Seq(RegField.w(log2Ceil(20 * 8 + 1), preambleDetectionThreshold))
+    0x5C -> Seq(RegField.r(32, txErrorMessage))
   )
 }
 
@@ -420,11 +417,17 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   basebandFrontend.io.back.messages <> messageStore.io.out
 
   // Interrupts
-  basebandFrontend.io.back.interrupt.rxError := bmc.io.interrupt.rxError // TODO: Add more blocks with errors here
+  basebandFrontend.io.back.interrupt.rxError := bmc.io.interrupt.rxError
   basebandFrontend.io.back.interrupt.rxStart := bmc.io.interrupt.rxStart
   basebandFrontend.io.back.interrupt.rxFinish := bmc.io.interrupt.rxFinish
-  basebandFrontend.io.back.interrupt.txError := bmc.io.interrupt.txError // TODO: Add more blocks with errors here
+  basebandFrontend.io.back.interrupt.txError := bmc.io.interrupt.txError
   basebandFrontend.io.back.interrupt.txFinish := bmc.io.interrupt.txFinish
+
+  // Status
+  basebandFrontend.io.back.status.status0 := Cat(bmc.io.state.mainControllerState, bmc.io.state.txControllerState, bmc.io.state.rxControllerState, bmc.io.state.txState, bmc.io.state.disassemblerState, bmc.io.state.assemblerState)
+  // TODO: Other important things to snipe
+  //  ADC input I and Q, LUT codes for AGC I, AGC Q, DCO I, DCO Q, LOCT, LOFSK, PLLD, preambleDetected
+
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim

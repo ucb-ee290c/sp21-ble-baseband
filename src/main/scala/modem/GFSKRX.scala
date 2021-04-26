@@ -9,7 +9,7 @@ class GFSKRXControlInputBundle extends Bundle {
   val enable = Bool()
   val imageRejectionOp = Bool()
   val accessAddressLSB = UInt(1.W)
-  val preambleDetectionThreshold = UInt(log2Ceil(20 * 8 + 1).W) // TODO: THIS SHOULD BE MMIO
+  val preambleDetectionThreshold = UInt(8.W)
 }
 
 class GFSKRXControlOutputBundle extends Bundle {
