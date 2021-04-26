@@ -16,7 +16,7 @@ class PacketDisassemblerTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Convert binary to bytes with no whitening" in {
     test(new PacketDisassembler).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val controlDriver = new DecoupledDriverMaster(c.clock, c.io.in.control)
+      val controlDriver = new ValidDriverMaster(c.clock, c.io.in.control)
       val inDriver = new DecoupledDriverMaster(c.clock, c.io.in.data)
       val dmaDriver = new DecoupledDriverSlave(c.clock, c.io.out.data, 0)
       val dmaMonitor = new DecoupledMonitor(c.clock, c.io.out.data)
@@ -33,7 +33,7 @@ class PacketDisassemblerTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.constants.channelIndex.poke("b000000".U)
 
       inDriver.push(inBits.map(x => (new DecoupledTX(UInt(1.W))).tx(x.U)))
-      controlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+      controlDriver.push(new ValidTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
         .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
 
       c.clock.step(400)
@@ -50,7 +50,7 @@ class PacketDisassemblerTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Fail to convert binary to bytes with whitening" in {
     test(new PacketDisassembler).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val controlDriver = new DecoupledDriverMaster(c.clock, c.io.in.control)
+      val controlDriver = new ValidDriverMaster(c.clock, c.io.in.control)
       val inDriver = new DecoupledDriverMaster(c.clock, c.io.in.data)
       val dmaDriver = new DecoupledDriverSlave(c.clock, c.io.out.data, 0)
       val dmaMonitor = new DecoupledMonitor(c.clock, c.io.out.data)
@@ -67,7 +67,7 @@ class PacketDisassemblerTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.constants.channelIndex.poke((scala.util.Random.nextInt(62) + 1).U) // Poke random 6 bit value (not 0)
 
       inDriver.push(inBits.map(x => (new DecoupledTX(UInt(1.W))).tx(x.U)))
-      controlDriver.push(new DecoupledTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
+      controlDriver.push(new ValidTX(new PDAControlInputBundle).tx((new PDAControlInputBundle)
         .Lit(_.aa -> aa.U, _.command -> PDAControlInputCommands.START_CMD)))
 
       c.clock.step(400)

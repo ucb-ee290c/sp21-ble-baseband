@@ -25,7 +25,7 @@ class AssemblerControlIO extends Bundle {
 }
 
 class DisassemblerControlIO extends Bundle {
-  val in = Flipped(Decoupled(new PDAControlInputBundle))
+  val in = Flipped(Valid(new PDAControlInputBundle))
   val out = Output(new PDAControlOutputBundle)
 }
 
