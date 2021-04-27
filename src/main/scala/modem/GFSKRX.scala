@@ -31,12 +31,14 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
       val out = Decoupled(UInt(1.W))
     }
     val control = new GFSKRXControlIO
-    val state = new Bundle {
+    val state = Output(new Bundle {
       val imageRejectionOut = SInt((params.adcBits + 3).W)
-      val cdrOut = ()
-      val dmodOut = ()
-      val accumulatorCount = Output(SInt(accumulatorWidth.W))
-    }
+      val bandpassF0 = UInt((params.adcBits + 3 + 12).W)
+      val bandpassF1 = UInt((params.adcBits + 3 + 12).W)
+      val envelopeF0 = UInt((params.adcBits + 3 + 1).W)
+      val envelopeF1 = UInt((params.adcBits + 3 + 1).W)
+      val accumulatorCount = SInt(accumulatorWidth.W)
+    })
   })
 
   /* Hilbert Filter for digital Image Rejection */
@@ -52,7 +54,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   /* GFSK Demodulation from recovered signal */
   val guess = Wire(Bool())
-  val demod = Module(new GFSKDemodulation(params, imageRejection.io.out.bits.getWidth))
+  val demod = Module(new GFSKDemodulation(params, params.adcBits + 3))
   demod.io.signal.bits := imageRejection.io.out.bits
   demod.io.signal.valid := imageRejection.io.out.valid
   imageRejection.io.out.ready := demod.io.signal.ready
@@ -92,7 +94,9 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   // State IO
   io.state.imageRejectionOut := imageRejection.io.out.bits
-  //io.state.cdrOut :=
-  //io.state.dmodOut :=
+  io.state.bandpassF0 := demod.io.state.bandpassF0
+  io.state.bandpassF1 := demod.io.state.bandpassF1
+  io.state.envelopeF0 := demod.io.state.envelopeF0
+  io.state.envelopeF1 := demod.io.state.envelopeF1
   io.state.accumulatorCount := accumulator
 }
