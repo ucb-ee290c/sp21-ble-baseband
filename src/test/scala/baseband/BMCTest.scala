@@ -43,7 +43,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
   val tests = 1
   val params = BLEBasebandModemParams()
   val beatBytes = 4
-/*
+
   it should "Pass a full baseband loop without whitening" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -339,7 +339,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       }
     }
   }
-*/
+
   it should "Properly receive data with random channel index" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -411,6 +411,78 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
         println("Recieved: ", outputBits)
         assert(length + 2 == outputLength)
         assert(pdu == outputBits)
+      }
+    }
+  }
+
+  it should "Exit RX Mode without complications" in {
+    test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
+      val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
+      val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
+
+      // Set the appropriate tuning parameters
+      c.io.tuning.control.imageRejectionOp.poke(0.B)
+      c.io.tuning.control.preambleDetectionThreshold.poke(140.U)
+      for (i <- 0 until tests) {
+        val channelIndex = 0
+        val accessAddress = scala.util.Random.nextInt.abs
+        val crcSeed = s"x555555"
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX,
+            _.additionalData -> channelIndex.U)
+        ))
+        c.clock.step()
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_ACCESS_ADDRESS,
+            _.additionalData -> accessAddress.U(32.W))
+        ))
+        c.clock.step()
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
+            _.inst.secondaryInst -> BasebandISA.CONFIG_CRC_SEED,
+            _.additionalData -> crcSeed.U)
+        ))
+        c.clock.step()
+
+        val addrInString = s"x${scala.util.Random.nextInt(1600)}0"
+
+        println(s"Test: \t addr 0${addrInString}")
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.RECEIVE_START_CMD,
+            _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
+        ))
+        c.clock.step()
+
+        val length = 4
+        val (packet, pdu) = TestUtility.packet(accessAddress, length)
+        val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
+        val input = TestUtility.testWaveform(bits)
+
+        val terminatePoint = scala.util.Random.nextInt(input.length)
+        println(s"Terminate point ${terminatePoint}")
+
+        for (s <- input.take(terminatePoint)) {
+          c.io.analog.data.rx.i.data.poke(s._1.U(8.W))
+          c.io.analog.data.rx.q.data.poke(s._1.U(8.W))
+          c.clock.step()
+        }
+
+        println("Trying to push mid-run RX exit")
+
+        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
+          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.RECEIVE_EXIT_CMD,
+            _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
+        ))
+
+        c.clock.step(50)
+
       }
     }
   }

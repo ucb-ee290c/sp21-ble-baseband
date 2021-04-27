@@ -8,7 +8,7 @@ import chisel3.experimental.FixedPoint
 class GFSKTXControlInputBundle(val params: BLEBasebandModemParams) extends Bundle {
   private val maxPacketSize = 1 + 4 + 2 + params.maxReadSize + 3
 
-  val totalBytes = UInt(log2Ceil(maxPacketSize).W)
+  val totalBytes = UInt(log2Ceil(maxPacketSize+1).W)
 }
 
 class GFSKTXControlOutputBundle extends Bundle {
@@ -29,6 +29,7 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
       val in = Flipped(Decoupled(UInt(1.W)))
     }
     val control = new GFSKTXControlIO(params)
+    val state = Output(UInt(log2Ceil(2+1).W))
   })
 
   private val maxPacketSize = 1 + 4 + params.maxReadSize + 3
@@ -36,6 +37,7 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
   val s_idle :: s_working :: nil = Enum(2)
 
   val state = RegInit(s_idle)
+  io.state := state
 
   val cyclesPerSymbol = 20
   val cyclesPerSample = cyclesPerSymbol / 10 // Oversampling must be 10
@@ -43,8 +45,8 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
   val counter = RegInit(0.U(8.W))
   val counterBytes = RegInit(0.U(3.W)) // Counts bits within a byte
 
-  val sentBytes = RegInit(0.U(log2Ceil(maxPacketSize).W))
-  val totalBytes = RegInit(0.U(log2Ceil(maxPacketSize).W))
+  val sentBytes = RegInit(0.U(log2Ceil(maxPacketSize+1).W))
+  val totalBytes = RegInit(0.U(log2Ceil(maxPacketSize+1).W))
 
   val done = RegInit(false.B)
 

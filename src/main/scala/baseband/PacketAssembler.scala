@@ -36,6 +36,7 @@ class PacketAssemblerIO extends Bundle {
   val in = new PAInputIO
   val out = new PAOutputIO
   val constants = Input(new BasebandConstants)
+  val state = Output(UInt(log2Ceil(6+1).W))
 }
 
 class PacketAssembler extends Module {
@@ -70,6 +71,8 @@ class PacketAssembler extends Module {
   // State
   val s_idle :: s_preamble :: s_aa :: s_pdu_header :: s_pdu_payload :: s_crc :: Nil = Enum(6)
   val state = RegInit(s_idle)
+
+  io.state := state
 
   // Internal Counters
   val counter = RegInit(0.U(8.W)) // Counts bytes in a given message component
