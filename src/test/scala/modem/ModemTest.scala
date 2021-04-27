@@ -17,7 +17,7 @@ class ModemTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new GFSKModem(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.control.rx.in.preambleDetectionThreshold.poke(140.U)
       c.io.control.rx.in.accessAddressLSB.poke(1.U)
-      c.io.control.rx.in.imageRejectionOp.poke(0.B)
+      c.io.control.rx.in.imageRejectionControl.poke(0.U)
       c.io.control.rx.in.enable.poke(1.B)
       c.io.digital.rx.ready.poke(1.B)
 

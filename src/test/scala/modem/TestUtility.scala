@@ -101,18 +101,21 @@ object TestUtility {
     centerInSupplies(analogLowpass(I, analog_F_sample, 10 * MHz) zip analogLowpass(Q, analog_F_sample, 10 * MHz))
   }
 
-  def fastIF(in: Seq[Double], modulationIndex: Double = 0.5): Seq[(Double, Double)] = {
+  def fastIF(in: Seq[Double], modulationIndex: Double = 0.5, initialPhaseOffset: Double = 0.0, image: Boolean = false): Seq[(Double, Double)] = {
     val timeSteps = Seq.tabulate[Double]((low_F_sample * symbol_time * (in.length / 10)).toInt){_.toDouble / low_F_sample}
     val modulationFrequencyDeviation = modulationIndex / (2 * symbol_time)
     println("Modulation Index: ", modulationIndex, "Modulation Frequency Deviation: ", modulationFrequencyDeviation)
     val frequencies = timeSteps.map {t => F_IF + in((t / (symbol_time / 10)).floor.toInt) * modulationFrequencyDeviation }
-    val phases = frequencies.map{var s: Double = 0.0; d => {s += d; 2 * math.Pi * s / low_F_sample}}
-    centerInSupplies(timeSteps.indices.map {i => 0.5 * math.cos(phases(i))} zip
-      timeSteps.indices.map {i => - 0.5 * math.sin(phases(i))})
+    val phases = frequencies.map{var s: Double = initialPhaseOffset; d => {s += d; 2 * math.Pi * s / low_F_sample}}
+
+    val I = if (!image) timeSteps.indices.map {i =>   0.5 * math.cos(phases(i))} else timeSteps.indices.map {i =>   0.5 * math.cos(phases(i))}
+    val Q = if (!image) timeSteps.indices.map {i => - 0.5 * math.sin(phases(i))} else timeSteps.indices.map {i =>   0.5 * math.sin(phases(i))}
+
+    I zip Q
   }
 
   def analogToDigital(in: Seq[(Double, Double)], f_sample: Double, adcBits: Int = BLEBasebandModemParams().adcBits): Seq[(Int, Int)] = {
-    val sampled = in.zipWithIndex.collect {case (e,i) if (i % (f_sample / digital_clock_F).toInt) == 0 => e}
+    //val sampled = in.zipWithIndex.collect {case (e,i) if (i % (f_sample / digital_clock_F).toInt) == 0 => e}
 
     val range = math.pow(2, adcBits) - 1
     val scaleWeight = range / 0.9
@@ -120,10 +123,15 @@ object TestUtility {
     sampled.map{ case (i, q) => (Math.round(i * scaleWeight).toInt, Math.round(q * scaleWeight).toDouble.toInt)}
   }
 
-  def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF): (Seq[(Int, Int)]) = {
-    val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
+  def testWaveform(bits: Seq[Int], centerFrequency: Double = F_RF, signalAmplitude: Double = 1.0, imageAmplitude: Double = 0.0): (Seq[(Int, Int)]) = {
     val modulationIndex = 0.45 + Random.nextDouble / 10
-    val testInput = analogToDigital(fastIF(FIR(bitstream(bits), gaussian_weights), modulationIndex = modulationIndex), low_F_sample)
+    val imageBits = Seq.tabulate(bits.size) {_ => Random.nextInt(2)}
+    val signal = fastIF(FIR(bitstream(bits), gaussian_weights), modulationIndex = modulationIndex)
+    val image = fastIF(FIR(bitstream(imageBits), gaussian_weights), modulationIndex = modulationIndex, initialPhaseOffset = Random.nextDouble() * 2 * math.Pi, image = true)
+    val completeSignal = (signal zip image).map { p: ((Double, Double), (Double, Double)) =>
+      (signalAmplitude * p._1._1 + imageAmplitude * p._2._1, signalAmplitude * p._1._2 + imageAmplitude * p._2._2)
+    }
+    val testInput = analogToDigital(centerInSupplies(completeSignal), low_F_sample)
     println("DONE GENERATING TEST INPUT")
     testInput
   }

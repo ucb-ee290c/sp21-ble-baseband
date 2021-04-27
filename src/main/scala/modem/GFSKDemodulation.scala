@@ -24,7 +24,7 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
     new GenericFIR(
       FixedPoint(inputBitwidth.W, 0.BP),
       FixedPoint((inputBitwidth + 12).W, 11.BP),
-      FIRCoefficients.GFSKRX_Bandpass_F1.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
+      FIRCoefficients.GFSKRX_Bandpass_F1_ALT.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
     )
   )
 

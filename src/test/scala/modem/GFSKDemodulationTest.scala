@@ -39,6 +39,7 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.in.i.bits := io.analog.i.bits
   imageRejection.io.in.q.bits := io.analog.q.bits
   imageRejection.io.control.operation := 0.B
+  imageRejection.io.control.IonLHS := 0.B
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
 
@@ -46,7 +47,7 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
     FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
 
   val bandpassF1 = Module( new GenericFIR(FixedPoint(10.W, 0.BP), FixedPoint(23.W, 11.BP),
-    FIRCoefficients.GFSKRX_Bandpass_F1.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
+    FIRCoefficients.GFSKRX_Bandpass_F1_ALT.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
 
   imageRejection.io.out.ready := bandpassF0.io.in.ready && bandpassF1.io.in.ready
 
@@ -81,7 +82,7 @@ class GFSKDemodulationTest extends AnyFlatSpec with ChiselScalatestTester {
       val numberOfBytes = 2
       val accessAddress = scala.util.Random.nextInt.abs
       val bits = Seq(0,0,0,0,0,0) ++ TestUtility.packet(accessAddress, numberOfBytes)._1 ++ Seq(0,0,0,0,0,0,0)
-      val input = TestUtility.testWaveform(bits)
+      val input = TestUtility.testWaveform(bits, imageAmplitude = 1)
       val initialPhaseOffset = Random.nextInt(20)
       c.clock.step(initialPhaseOffset) // random phase offset
       var retrievedF0 = Seq[Int]()

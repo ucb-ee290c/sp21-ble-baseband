@@ -1,14 +1,15 @@
 package modem
 
 
-import baseband.{BLEBasebandModemParams}
-import chisel3._
+import baseband.BLEBasebandModemParams
+import chisel3.{Mux, _}
 import chisel3.experimental.FixedPoint
 import chisel3.util._
 
 class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
   val control = Input(new Bundle {
     val operation = Bool()
+    val IonLHS = Bool()
   })
   val in = new Bundle {
     val i = Flipped(Decoupled(UInt(params.adcBits.W)))
@@ -46,9 +47,17 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   io.out.valid := fir.io.out.valid & I_valid_delayed
   // Depending on the control operation, either subtract the output of the FIR filter, or add it to I
   // TODO: Is this okay?
-  io.out.bits := Mux(io.control.operation,
-                      I_delayed +& Utility.roundTowardsZero(fir.io.out.bits.data),
-                      I_delayed -& Utility.roundTowardsZero(fir.io.out.bits.data))
+  io.out.bits := Mux(!io.control.IonLHS,
+    Mux(io.control.operation,
+    I_delayed +& Utility.roundTowardsZero(fir.io.out.bits.data),
+    I_delayed -& Utility.roundTowardsZero(fir.io.out.bits.data)),
+    Mux(io.control.operation,
+      Utility.roundTowardsZero(fir.io.out.bits.data) +& I_delayed,
+      Utility.roundTowardsZero(fir.io.out.bits.data) -& I_delayed)
+  )
+
+
+
   // Is the filter ready to take in the inputs?
   io.in.i.ready := fir.io.in.ready
   io.in.q.ready := fir.io.in.ready

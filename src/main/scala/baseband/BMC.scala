@@ -70,7 +70,7 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   modem.io.tuning <> io.tuning
 
   baseband.io.modem.control.preambleDetected := modem.io.control.rx.out.preambleDetected
-  modem.io.control.rx.in.imageRejectionOp := io.tuning.control.imageRejectionOp
+  modem.io.control.rx.in.imageRejectionControl := io.tuning.control.imageRejectionControl
   modem.io.control.rx.in.enable := controller.io.analog.enable.rx
   modem.io.control.rx.in.accessAddressLSB := controller.io.constants.accessAddress(0)
   modem.io.control.rx.in.preambleDetectionThreshold := io.tuning.control.preambleDetectionThreshold

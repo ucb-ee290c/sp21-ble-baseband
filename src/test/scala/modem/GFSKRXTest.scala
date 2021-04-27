@@ -36,7 +36,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   val gfskRX = Module(new GFSKRX(params)).io
 
   val preambleDetected = gfskRX.control.out.preambleDetected
-  gfskRX.control.in.imageRejectionOp := 0.B
+  gfskRX.control.in.imageRejectionControl := 0.U
   gfskRX.control.in.enable := 1.B
   gfskRX.control.in.accessAddressLSB := io.control.aaLSB
   gfskRX.control.in.preambleDetectionThreshold := 140.U
@@ -47,7 +47,7 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
 }
 
 class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
-  it should "Plot slow vs fast data generation" in {
+  /*it should "Plot slow vs fast data generation" in {
     val numberOfBytes = 4
 
     val accessAddress = scala.util.Random.nextInt.abs
@@ -57,24 +57,16 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
     val slowCleanSignal = RFtoIF(FIR(bitstream(bits), gaussian_weights), F_RF)
     val fastCleanSignal = fastIF(FIR(bitstream(bits), gaussian_weights))
 
-    val f0 = Figure()
-    val p0 = f0.subplot(0)
-    val range = 500
-    p0 += plot(Seq.tabulate(range)(i => i), analogToDigital(slowCleanSignal, analog_F_sample).map { case (i, _) => i }.take(range))
-    p0 += plot(Seq.tabulate(range)(i => i), analogToDigital(fastCleanSignal, low_F_sample).map { case (i, _) => i }.take(range), colorcode = "red")
+    val slowNoisySignal = addNoiseToCleanSignal(slowCleanSignal, 0, analog_F_sample)
+    val fastNoisySignal = addNoiseToCleanSignal(fastCleanSignal, 0, low_F_sample)
 
-    Seq(0, 1, 2, 3, 4).map { SNR => // , 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 50, 100
-      val slowNoisySignal = addNoiseToCleanSignal(slowCleanSignal, SNR, analog_F_sample)
-      val fastNoisySignal = addNoiseToCleanSignal(fastCleanSignal, SNR, low_F_sample)
-
-      val f = Figure()
-      val p = f.subplot(0)
-      val range = 100
-      p += plot(Seq.tabulate(range)(i => i), slowNoisySignal.map { case (i, _) => i }.take(range))
-      p += plot(Seq.tabulate(range)(i => i), fastNoisySignal.map { case (i, _) => i }.take(range), colorcode = "red")
-    }
-  }
-
+    val f = Figure()
+    val p = f.subplot(0)
+    val range = 100
+    p += plot(Seq.tabulate(slowNoisySignal.size)(i => i), slowNoisySignal.map { case (i, _) => i }.take(range))
+    p += plot(Seq.tabulate(fastNoisySignal.size)(i => i), fastNoisySignal.map { case (i, _) => i }.take(range), colorcode = "red")
+  }*/
+/*
   it should "Determine SNR vs BER" in {
     val numberOfBytes = 10
 
@@ -106,13 +98,14 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
         inDriverQ.push(input.map(p => new DecoupledTX(UInt(8.W)).tx(p._2.U(8.W))))
 
         val expected = packet.slice(8, packet.size)
+        /*
         var counter = 0
 
-        while((outMonitor.monitoredTransactions.length < expected.length - 10) || (counter < (8*numberOfBytes*20 + 100))) {
+        while((outMonitor.monitoredTransactions.length < expected.length - 10) && (counter < (8*numberOfBytes*20 + 200))) {
           counter = counter + 1
           c.clock.step()
-        }
-
+        }*/
+        c.clock.step(bits.size * 20)
         val retrieved = outMonitor.monitoredTransactions.map{_.data.litValue.toInt}
 
         println(retrieved.length)
@@ -132,7 +125,7 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
 
     println(SNRvBER)
   }
-
+*/
   it should "PASS Fuzz" in {
     test(new GFSKRXTestModule(new BLEBasebandModemParams())).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val inDriverI = new DecoupledDriverMaster(c.clock, c.io.analog.i)
@@ -141,21 +134,10 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
       val accessAddress = scala.util.Random.nextInt.abs
 
-      val numberOfBytes = 1
+      val numberOfBytes = 100
       val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
       val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
-
-      val fast = analogToDigital(fastIF(FIR(bitstream(bits), gaussian_weights)), TestUtility.low_F_sample)
-      val slow = analogToDigital(RFtoIF(FIR(bitstream(bits), gaussian_weights), F_RF), TestUtility.analog_F_sample)
-
-      val f = Figure()
-      val p = f.subplot(0)
-      p += plot(Seq.tabulate(fast.size)(i => i).take(500), fast.map{_._1}.take(500), colorcode = "r")
-      p += plot(Seq.tabulate(slow.size)(i => i).take(500), slow.map{_._1}.take(500), colorcode = "b")
-
-
-
-      val input = TestUtility.testWaveform(bits)
+      val input = TestUtility.testWaveform(bits, imageAmplitude = 1)
       val initialPhaseOffset = Random.nextInt(20)
       c.io.control.aaLSB.poke((accessAddress & 0x1).U)
       c.clock.step(initialPhaseOffset) // random phase offset
