@@ -9,6 +9,12 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
   val io = IO(new Bundle {
       val signal = Flipped(Decoupled(SInt(inputBitwidth.W)))
       val guess = Decoupled(UInt(1.W))
+      val state = Output(new Bundle {
+        val bandpassF0 = UInt((inputBitwidth + 12).W)
+        val bandpassF1 = UInt((inputBitwidth + 12).W)
+        val envelopeF0 = UInt((inputBitwidth + 1).W)
+        val envelopeF1 = UInt((inputBitwidth + 1).W)
+      })
   })
 
   /* Bandpass Filters for 0 and 1 frequencies */
@@ -55,4 +61,10 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
   
   val difference = Cat(0.U(1.W), envelopeDetectorF1.io.out.bits).asSInt() -& Cat(0.U(1.W), envelopeDetectorF0.io.out.bits).asSInt()
   io.guess.bits := Mux(difference === 0.S, RegNext(io.guess.bits), Mux(difference > 0.S, 1.B, 0.B))
+
+  /* Connect State Outputs */
+  io.state.bandpassF0 := bandpassF0.io.out.bits.data.asUInt()
+  io.state.bandpassF1 := bandpassF1.io.out.bits.data.asUInt()
+  io.state.envelopeF0 := envelopeDetectorF0.io.out.bits.asUInt()
+  io.state.envelopeF1 := envelopeDetectorF1.io.out.bits.asUInt()
 }
