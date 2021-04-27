@@ -31,6 +31,12 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
       val out = Decoupled(UInt(1.W))
     }
     val control = new GFSKRXControlIO
+    val state = new Bundle {
+      val imageRejectionOut = SInt((params.adcBits + 3).W)
+      val cdrOut = ()
+      val dmodOut = ()
+      val accumulatorCount = Output(SInt(accumulatorWidth.W))
+    }
   })
 
   /* Hilbert Filter for digital Image Rejection */
@@ -82,4 +88,10 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
     preambleValid := preambleDetected
   }
   io.control.out.preambleDetected := preambleValid
+
+  // State IO
+  io.state.imageRejectionOut := imageRejection.io.out.bits
+  //io.state.cdrOut :=
+  //io.state.dmodOut :=
+  io.state.accumulatorCount := accumulator
 }

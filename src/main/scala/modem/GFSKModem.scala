@@ -155,6 +155,15 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
     }
     val state = new Bundle {
       val txState = Output(UInt(log2Ceil(2+1).W))
+      val gfskIndex = Output(UInt(6.W))
+      val i = new Bundle {
+        val agcIndex = Output(UInt(5.W))
+        val dcoIndex = Output(UInt(5.W))
+      }
+      val q = new Bundle {
+        val agcIndex = Output(UInt(5.W))
+        val dcoIndex = Output(UInt(5.W))
+      }
     }
   })
 
@@ -192,7 +201,6 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
 
   val tx = Module(new GFSKTX(params))
   tx.io.control <> io.control.tx
-  io.state.txState := tx.io.state
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
@@ -248,4 +256,12 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   io.analog.pllD := DontCare
   io.analog.loCT := modemLUTs.LOCT(io.constants.channelIndex)
   io.analog.tx.loFSK := modemLUTs.LOFSK(tx.io.analog.gfskIndex)
+
+  // State
+  io.state.txState := tx.io.state
+  io.state.gfskIndex := tx.io.analog.gfskIndex
+  io.state.i.agcIndex := iAGC.io.vgaLUTIndex
+  io.state.i.dcoIndex := idcoFront.io.dcoLUTIndex
+  io.state.q.agcIndex := qAGC.io.vgaLUTIndex
+  io.state.q.dcoIndex := qdcoFront.io.dcoLUTIndex
 }

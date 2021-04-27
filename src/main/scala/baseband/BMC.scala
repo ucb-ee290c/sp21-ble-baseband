@@ -45,12 +45,16 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
       val control = Input(new GFSKModemTuningControlIO(params))
     }
     val state = new Bundle {
+      // State 0 components
       val assemblerState = Output(UInt(log2Ceil(6+1).W)) // 3
       val disassemblerState = Output(UInt(log2Ceil(7+1).W)) // 3
       val txState = Output(UInt(log2Ceil(2+1).W)) // 2
       val rxControllerState = Output(UInt(log2Ceil(4+1).W)) // 3
       val txControllerState = Output(UInt(log2Ceil(3+1).W)) // 2
       val mainControllerState = Output(UInt(log2Ceil(4+1).W)) // 3
+
+      // State 1 components
+      val preambleDetected = Output(Bool())
     }
   })
 
@@ -90,6 +94,7 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   io.state.rxControllerState := controller.io.state.rxControllerState
   io.state.txControllerState := controller.io.state.txControllerState
   io.state.mainControllerState := controller.io.state.mainControllerState
+  io.state.preambleDetected := modem.io.control.rx.out.preambleDetected
 
   // Interrupts
   io.messages <> controller.io.messages

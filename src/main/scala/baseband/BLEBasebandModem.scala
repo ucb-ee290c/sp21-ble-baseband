@@ -427,6 +427,7 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   basebandFrontend.io.back.status.status0 := Cat(bmc.io.state.mainControllerState, bmc.io.state.txControllerState, bmc.io.state.rxControllerState, bmc.io.state.txState, bmc.io.state.disassemblerState, bmc.io.state.assemblerState)
   // TODO: Other important things to snipe
   //  ADC input I and Q, LUT codes for AGC I, AGC Q, DCO I, DCO Q, LOCT, LOFSK, PLLD, preambleDetected
+  //  Capture LUT index as first priority, LUT output if space permitting
 
 
   // Other off chip / analog IO
