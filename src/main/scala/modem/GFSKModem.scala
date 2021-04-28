@@ -52,7 +52,7 @@ class GFSKModemTuningControlIO(val params: BLEBasebandModemParams) extends Bundl
       val useDCO = Bool()
     }
   }
-  val imageRejectionControl = UInt(2.W)
+  val imageRejectionControl = UInt(3.W)
   val preambleDetectionThreshold = UInt(log2Ceil(20 * 8 + 1).W)
   val debug = new Bundle {
     val enabled = Bool()

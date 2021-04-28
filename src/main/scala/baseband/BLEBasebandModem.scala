@@ -191,7 +191,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   val enable_rx_q = RegInit(0.U(5.W))
 
   /* Modem RX MMIO Parameters */
-  val image_rejection_control = RegInit(0.U(2.W))
+  val image_rejection_control = RegInit(0.U(3.W))
   val preambleDetectionThreshold = RegInit(140.U(8.W))
 
   val rxErrorMessage = Wire(new DecoupledIO(UInt(32.W)))
@@ -355,7 +355,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x45 -> Seq(RegField(6, dac_t1)),
     0x46 -> Seq(RegField(6, dac_t2)),
     0x47 -> Seq(RegField(6, dac_t3)),
-    0x48 -> Seq(RegField(2, image_rejection_control)),
+    0x48 -> Seq(RegField(3, image_rejection_control)),
     0x49 -> Seq(RegField(8, preambleDetectionThreshold)), // Preamble Detection Configuration
     0x4A -> Seq(RegField(10, mux_dbg_in)), // Debug Configuration
     0x4C -> Seq(RegField(10, mux_dbg_out)),

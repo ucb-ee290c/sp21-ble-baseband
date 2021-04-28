@@ -7,7 +7,7 @@ import baseband.BLEBasebandModemParams
 
 class GFSKRXControlInputBundle extends Bundle {
   val enable = Bool()
-  val imageRejectionControl = UInt(2.W)
+  val imageRejectionControl = UInt(3.W)
   val accessAddressLSB = UInt(1.W)
   val preambleDetectionThreshold = UInt(8.W)
 }
@@ -54,6 +54,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.in.q.bits := io.analog.q.bits
   imageRejection.io.control.operation := io.control.in.imageRejectionControl(0).asBool()
   imageRejection.io.control.IonLHS := io.control.in.imageRejectionControl(1).asBool()
+  imageRejection.io.control.IonTop := io.control.in.imageRejectionControl(2).asBool()
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
   imageRejection.io.filterCoeffCommand := io.filterCoeffCommand

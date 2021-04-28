@@ -4,12 +4,13 @@ package modem
 import baseband.BLEBasebandModemParams
 import chisel3.{Mux, _}
 import chisel3.experimental.FixedPoint
-import chisel3.util._
+import chisel3.util.{Cat, _}
 
 class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
   val control = Input(new Bundle {
     val operation = Bool()
     val IonLHS = Bool()
+    val IonTop = Bool()
   })
   val in = new Bundle {
     val i = Flipped(Decoupled(UInt(params.adcBits.W)))
@@ -25,8 +26,14 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   val I_scaled = Wire(SInt((params.adcBits + 1).W))
   val Q_scaled = Wire(SInt((params.adcBits + 1).W))
   val midpoint = ((math.pow(2, params.adcBits) - 1) / 2).floor.toInt // compute the appropriate midpoint
-  I_scaled := Cat(0.U(1.W), io.in.i.bits).asSInt() - midpoint.S((params.adcBits + 1).W)
-  Q_scaled := Cat(0.U(1.W), io.in.q.bits).asSInt() - midpoint.S((params.adcBits + 1).W)
+
+  I_scaled := Mux(!io.control.IonTop,
+                  Cat(0.U(1.W), io.in.i.bits).asSInt() - midpoint.S((params.adcBits + 1).W),
+                  Cat(0.U(1.W), io.in.q.bits).asSInt() - midpoint.S((params.adcBits + 1).W))
+
+  Q_scaled := Mux(!io.control.IonTop,
+                  Cat(0.U(1.W), io.in.q.bits).asSInt() - midpoint.S((params.adcBits + 1).W),
+                  Cat(0.U(1.W), io.in.i.bits).asSInt() - midpoint.S((params.adcBits + 1).W))
 
   var coeffs = FIRCoefficients.Hilbert.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
   // The input I should be synchronized with the middle of the FIR hilbert filter for Q, so it should be delayed.
@@ -48,6 +55,7 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   io.out.valid := fir.io.out.valid & I_valid_delayed
   // Depending on the control operation, either subtract the output of the FIR filter, or add it to I
   // TODO: Is this okay?
+
   io.out.bits := Mux(!io.control.IonLHS,
     Mux(io.control.operation,
     I_delayed +& Utility.roundTowardsZero(fir.io.out.bits.data),
