@@ -69,7 +69,7 @@ class BLEBasebandModemMessagesIO extends Bundle {
 class BLEBasebandModemBackendIO extends Bundle {
   val cmd = Decoupled(new BLEBasebandModemCommand)
   val lutCmd = Decoupled(new GFSKModemLUTCommand)
-  val firCmd = Flipped(Valid(new FIRCoefficientChangeCommand))
+  val firCmd = Valid(new FIRCoefficientChangeCommand)
   val status = Input(new BLEBasebandModemStatus)
   val interrupt = Input(new BLEBasebandModemInterrupts)
   val messages = Flipped(new BLEBasebandModemMessagesIO)
@@ -115,7 +115,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   //FIR filter reprogramming instruction
   val firCmd = Wire(new DecoupledIO(UInt(32.W)))
-  firCmd.ready := 1.B // TODO: is this okay?
+  firCmd.ready := true.B
   io.back.firCmd.bits.FIR := firCmd.bits(3, 0)
   io.back.firCmd.bits.change.coeff := firCmd.bits(9, 4)
   io.back.firCmd.bits.change.value := firCmd.bits(31, 10)
