@@ -8,7 +8,7 @@ class EnvelopeDetector(bitWidth: Int) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(SInt(bitWidth.W)))
     val out = Decoupled(UInt((bitWidth + 3).W)) // TODO: Determine width of sum output
-    val filterCoeffCommand = Input(Valid(new FIRCoefficientChange))
+    val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChange))
   })
 
   val cyclesPerSymbol = 20 // TODO: Make this a MMIO setting

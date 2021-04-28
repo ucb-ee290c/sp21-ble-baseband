@@ -349,6 +349,10 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       // Set the appropriate tuning parameters
       c.io.tuning.control.imageRejectionControl.poke(0.U)
       c.io.tuning.control.preambleDetectionThreshold.poke(140.U)
+      c.io.firCmd.valid.poke(0.B)
+      c.io.firCmd.bits.FIR.poke(0.U)
+      c.io.firCmd.bits.change.coeff.poke(0.U)
+      c.io.firCmd.bits.change.value.poke(0.U)
       for (i <- 0 until tests) {
         val channelIndex = 0
         val accessAddress = scala.util.Random.nextInt.abs
@@ -385,14 +389,14 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
             _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
         ))
         c.clock.step()
-        val length = 255
+        val length = 50
         val (packet, pdu) = TestUtility.packet(accessAddress, length)
         val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
         val input = TestUtility.testWaveform(bits)
 
         for (s <- input) {
           c.io.analog.data.rx.i.data.poke(s._1.U(8.W))
-          c.io.analog.data.rx.q.data.poke(s._1.U(8.W))
+          c.io.analog.data.rx.q.data.poke(s._2.U(8.W))
           c.clock.step()
         }
 

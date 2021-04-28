@@ -2,8 +2,7 @@ package baseband
 
 import chisel3._
 import chisel3.util._
-import modem.{GFSKModem, GFSKModemAnalogIO, GFSKModemLUTCommand, GFSKModemTuningControlIO}
-
+import modem.{FIRCoefficientChangeCommand, GFSKModem, GFSKModemAnalogIO, GFSKModemLUTCommand, GFSKModemTuningControlIO}
 import ee290cdma._
 
 // Baseband, Modem, and Controller Paired in a Unit
@@ -28,6 +27,7 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
     }
     val interrupt = Output(new BLEBasebandModemInterrupts)
     val lutCmd = Flipped(Decoupled(new GFSKModemLUTCommand))
+    val firCmd = Flipped(Valid(new FIRCoefficientChangeCommand))
     val messages =  new BLEBasebandModemMessagesIO
     val tuning = new Bundle {
       val data = new Bundle {
@@ -102,6 +102,7 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   // Modem
   val modem = Module(new GFSKModem(params))
   modem.io.lutCmd <> io.lutCmd
+  modem.io.filterCoeffCommand := io.firCmd
   modem.io.analog.rx <> io.analog.data.rx
   modem.io.constants := controller.io.constants
   modem.io.control <> controller.io.modemControl

@@ -13,6 +13,7 @@ object FIRCodes {
   val RX_BANDPASS_F1 = 2.U
   val RX_ENVELOPE_F0 = 3.U
   val RX_ENVELOPE_F1 = 4.U
+  val TX_GAUSSIAN = 5.U
 }
 
 class FIRCoefficientChangeCommand extends Bundle {
@@ -59,7 +60,7 @@ object GenericFIRBundle {
 class GenericFIRIO(genIn:FixedPoint, genOut:FixedPoint) extends Bundle {
   val in = Flipped(Decoupled(GenericFIRBundle(genIn)))
   val out = Decoupled(GenericFIRBundle(genOut))
-  val coeff = Input(Valid(new FIRCoefficientChange))
+  val coeff = Flipped(Valid(new FIRCoefficientChange))
 }
 object GenericFIRIO {
   def apply(genIn:FixedPoint, genOut:FixedPoint): GenericFIRIO = new GenericFIRIO(genIn, genOut)

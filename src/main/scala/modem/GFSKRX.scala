@@ -43,7 +43,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
       val envelopeF1 = UInt((params.adcBits + 3 + 1).W)
       val accumulatorCount = SInt(accumulatorWidth.W)
     })
-    val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
+    val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChangeCommand))
   })
 
   /* Hilbert Filter for digital Image Rejection */

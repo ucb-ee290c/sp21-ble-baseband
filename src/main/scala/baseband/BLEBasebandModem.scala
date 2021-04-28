@@ -69,6 +69,7 @@ class BLEBasebandModemMessagesIO extends Bundle {
 class BLEBasebandModemBackendIO extends Bundle {
   val cmd = Decoupled(new BLEBasebandModemCommand)
   val lutCmd = Decoupled(new GFSKModemLUTCommand)
+  val firCmd = Flipped(Valid(new FIRCoefficientChangeCommand))
   val status = Input(new BLEBasebandModemStatus)
   val interrupt = Input(new BLEBasebandModemInterrupts)
   val messages = Flipped(new BLEBasebandModemMessagesIO)
@@ -111,6 +112,14 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.back.lutCmd.bits.address := lutCmd.bits(9, 4)
   io.back.lutCmd.bits.value := lutCmd.bits(31, 10)
   io.back.lutCmd.valid := lutCmd.valid
+
+  //FIR filter reprogramming instruction
+  val firCmd = Wire(new DecoupledIO(UInt(32.W)))
+  firCmd.ready := 1.B // TODO: is this okay?
+  io.back.firCmd.bits.FIR := firCmd.bits(3, 0)
+  io.back.firCmd.bits.change.coeff := firCmd.bits(9, 4)
+  io.back.firCmd.bits.change.value := firCmd.bits(31, 10)
+  io.back.firCmd.valid := firCmd.valid
 
   // Tuning bits store
   val trim_g0 = RegInit(0.U(8.W))
@@ -355,7 +364,8 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x50 -> Seq(RegField.w(32, lutCmd)), // LUT Programming
     0x54 -> Seq(RegField.r(32, rxErrorMessage)), // Interrupt Messages
     0x58 -> Seq(RegField.r(32, rxFinishMessage)),
-    0x5C -> Seq(RegField.r(32, txErrorMessage))
+    0x5C -> Seq(RegField.r(32, txErrorMessage)),
+    0x60 -> Seq(RegField.w(32, firCmd))
   )
 }
 
@@ -398,6 +408,7 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   bmc.io.dma.readData <> dma.io.read.queue
   bmc.io.dma.writeReq <> dma.io.write.req
   bmc.io.lutCmd <> basebandFrontend.io.back.lutCmd
+  bmc.io.firCmd <> basebandFrontend.io.back.firCmd
   bmc.io.tuning.control := basebandFrontend.io.tuningControl
 
   // Interrupt Message Store

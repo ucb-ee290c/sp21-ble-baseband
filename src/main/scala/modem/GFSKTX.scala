@@ -30,6 +30,7 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
     }
     val control = new GFSKTXControlIO(params)
     val state = Output(UInt(log2Ceil(2+1).W))
+    val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChangeCommand))
   })
 
   private val maxPacketSize = 1 + 4 + params.maxReadSize + 3
@@ -55,6 +56,10 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
 
   val firWeights = FIRCoefficients.gaussianWeights.map(w => FixedPoint.fromDouble(w, 8.W, 6.BP))
   val fir = Module(new GenericFIR(FixedPoint(2.W, 0.BP), FixedPoint(11.W, 6.BP), firWeights))
+  fir.io.coeff.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.TX_GAUSSIAN
+  fir.io.coeff.bits := io.filterCoeffCommand.bits.change
+
+
   fir.io.in.valid := firInValid
   fir.io.in.bits.data := firInData
   fir.io.out.ready := state === s_working

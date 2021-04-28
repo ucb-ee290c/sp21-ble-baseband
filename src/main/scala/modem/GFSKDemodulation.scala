@@ -15,7 +15,7 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
         val envelopeF0 = UInt((inputBitwidth + 1).W)
         val envelopeF1 = UInt((inputBitwidth + 1).W)
       })
-    val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
+    val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChangeCommand))
   })
 
   /* Bandpass Filters for 0 and 1 frequencies */

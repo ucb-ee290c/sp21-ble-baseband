@@ -15,7 +15,7 @@ class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
     val i = Flipped(Decoupled(UInt(params.adcBits.W)))
     val q = Flipped(Decoupled(UInt(params.adcBits.W)))
   }
-  val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
+  val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChangeCommand))
   val out = Decoupled(SInt((params.adcBits + 3).W))
 }
 
