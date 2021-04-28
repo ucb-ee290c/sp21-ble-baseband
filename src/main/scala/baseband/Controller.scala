@@ -444,6 +444,22 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
     _.accessAddress -> "x8E89BED6".U
   )))
 
+  val indexToPhysical = RegInit(VecInit(Seq.tabulate(40)(i =>
+    if (i < 11) {
+      (i + 1).U
+    } else if (i >= 11 && i < 37) {
+      (i + 2).U
+    } else if (i == 37) {
+      0.U
+    } else if (i == 38) {
+      12.U
+    } else {
+      i.U
+    }
+  )))
+
+  constants.physicalIndex := indexToPhysical(constants.channelIndex)
+
   io.constants := constants
   io.modemControl.rx <> DontCare
 
@@ -488,7 +504,7 @@ class Controller(params: BLEBasebandModemParams, beatBytes: Int) extends Module 
   io.basebandControl.loopback := loopbackMask(1,0).asBools()
 
   // Analog IO
-  io.analog.pllD := 176.U + constants.channelIndex + (state === s_tx).asUInt() // TODO: Channel index -> physical channel
+  io.analog.pllD := 176.U + constants.physicalIndex + (state === s_tx).asUInt() // TODO: Channel index -> physical channel
   io.analog.enable.rx := Mux(state === s_rx | state === s_debug, (scala.math.pow(2, io.analog.enable.rx.getWidth) - 1).toInt.asUInt, 0.U)
   io.analog.offChipMode.rx := state === s_rx
   io.analog.offChipMode.tx := state === s_tx

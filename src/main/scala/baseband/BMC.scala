@@ -52,9 +52,37 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
       val rxControllerState = Output(UInt(log2Ceil(4+1).W)) // 3
       val txControllerState = Output(UInt(log2Ceil(3+1).W)) // 2
       val mainControllerState = Output(UInt(log2Ceil(4+1).W)) // 3
+      val imageRejectionOut = Output(SInt((params.adcBits + 3).W))  // 11
+      // TOTAL: 27
 
       // State 1 components
-      val preambleDetected = Output(Bool())
+      val preambleDetected = Output(Bool()) // 1
+      val bandpassF0 = Output(UInt((params.adcBits + 3 + 12).W)) // 23
+      // + ADC I 8
+      // TOTAL: 32
+
+      // State 2 components
+      val bandpassF1 = Output(UInt((params.adcBits + 3 + 12).W)) // 23
+      val accumulatorCount = Output(SInt(log2Ceil((params.samplesPerSymbol * 2) + 1).W)) // 7
+      // TOTAL: 30
+
+      // State 3 Components
+      val envelopeF0 = Output(UInt((params.adcBits + 3 + 1).W)) // 12
+      val envelopeF1 = Output(UInt((params.adcBits + 3 + 1).W)) // 12
+      // + ADC Q 8
+      // TOTAL: 32
+
+      // State 4 Components
+      val gfskIndex = Output(UInt(6.W))  // 6
+      val i = new Bundle {
+        val agcIndex = Output(UInt(5.W)) // 5
+        val dcoIndex = Output(UInt(5.W)) // 5
+      }
+      val q = new Bundle {
+        val agcIndex = Output(UInt(5.W)) // 5
+        val dcoIndex = Output(UInt(5.W)) // 5
+      }
+      // TOTAL: 26
     }
   })
 
@@ -95,6 +123,17 @@ class BMC(params: BLEBasebandModemParams, beatBytes: Int) extends Module {
   io.state.txControllerState := controller.io.state.txControllerState
   io.state.mainControllerState := controller.io.state.mainControllerState
   io.state.preambleDetected := modem.io.control.rx.out.preambleDetected
+  io.state.imageRejectionOut := modem.io.state.imageRejectionOut
+  io.state.bandpassF0 := modem.io.state.bandpassF0
+  io.state.bandpassF1 := modem.io.state.bandpassF1
+  io.state.envelopeF0 := modem.io.state.envelopeF0
+  io.state.envelopeF1 := modem.io.state.envelopeF1
+  io.state.accumulatorCount := modem.io.state.accumulatorCount
+  io.state.i.agcIndex := modem.io.state.i.agcIndex
+  io.state.i.dcoIndex := modem.io.state.i.dcoIndex
+  io.state.q.agcIndex := modem.io.state.q.agcIndex
+  io.state.q.dcoIndex := modem.io.state.q.dcoIndex
+  io.state.gfskIndex := modem.io.state.gfskIndex
 
   // Interrupts
   io.messages <> controller.io.messages

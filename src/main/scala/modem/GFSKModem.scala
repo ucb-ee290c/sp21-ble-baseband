@@ -165,6 +165,12 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
         val agcIndex = Output(UInt(5.W))
         val dcoIndex = Output(UInt(5.W))
       }
+      val imageRejectionOut = Output(SInt((params.adcBits + 3).W))
+      val bandpassF0 = Output(UInt((params.adcBits + 3 + 12).W))
+      val bandpassF1 = Output(UInt((params.adcBits + 3 + 12).W))
+      val envelopeF0 = Output(UInt((params.adcBits + 3 + 1).W))
+      val envelopeF1 = Output(UInt((params.adcBits + 3 + 1).W))
+      val accumulatorCount = Output(SInt(log2Ceil((params.samplesPerSymbol * 2) + 1).W))
     }
   })
 
@@ -265,4 +271,10 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   io.state.i.dcoIndex := idcoFront.io.dcoLUTIndex
   io.state.q.agcIndex := qAGC.io.vgaLUTIndex
   io.state.q.dcoIndex := qdcoFront.io.dcoLUTIndex
+  io.state.imageRejectionOut := rx.io.state.imageRejectionOut
+  io.state.bandpassF0 := rx.io.state.bandpassF0
+  io.state.bandpassF1 := rx.io.state.bandpassF1
+  io.state.envelopeF0 := rx.io.state.envelopeF0
+  io.state.envelopeF1 := rx.io.state.envelopeF1
+  io.state.accumulatorCount := rx.io.state.accumulatorCount
 }

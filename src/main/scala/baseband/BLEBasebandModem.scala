@@ -112,17 +112,6 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
   io.back.lutCmd.bits.value := lutCmd.bits(31, 10)
   io.back.lutCmd.valid := lutCmd.valid
 
-  // Status regs
-  val status1 = RegInit(0.U(32.W))
-  val status2 = RegInit(0.U(32.W))
-  val status3 = RegInit(0.U(32.W))
-  val status4 = RegInit(0.U(32.W))
-
-  status1 := io.back.status.status1
-  status2 := io.back.status.status2
-  status3 := io.back.status.status3
-  status4 := io.back.status.status4
-
   // Tuning bits store
   val trim_g0 = RegInit(0.U(8.W))
   val trim_g1 = RegInit(0.U(8.W))
@@ -194,7 +183,7 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
 
   /* Modem RX MMIO Parameters */
   val image_rejection_control = RegInit(0.U(2.W))
-  val preambleDetectionThreshold = RegInit(140.U(log2Ceil(20 * 8 + 1).W))
+  val preambleDetectionThreshold = RegInit(140.U(8.W))
 
   val rxErrorMessage = Wire(new DecoupledIO(UInt(32.W)))
   val rxFinishMessage = Wire(new DecoupledIO(UInt(32.W)))
@@ -287,10 +276,10 @@ trait BLEBasebandModemFrontendModule extends HasRegMap {
     0x00 -> Seq(RegField.w(32, inst)), // Command start
     0x04 -> Seq(RegField.w(32, additionalData)),
     0x08 -> Seq(RegField.r(32, io.back.status.status0)), // Status start
-    0x0C -> Seq(RegField.r(32, status1)),
-    0x10 -> Seq(RegField.r(32, status2)),
-    0x14 -> Seq(RegField.r(32, status3)),
-    0x18 -> Seq(RegField.r(32, status4)),
+    0x0C -> Seq(RegField.r(32, io.back.status.status1)),
+    0x10 -> Seq(RegField.r(32, io.back.status.status2)),
+    0x14 -> Seq(RegField.r(32, io.back.status.status3)),
+    0x18 -> Seq(RegField.r(32, io.back.status.status4)),
     0x1C -> Seq(RegField(8, trim_g0)), // Tuning start, Trim
     0x1D -> Seq(RegField(8, trim_g1)),
     0x1E -> Seq(RegField(8, trim_g2)),
@@ -424,11 +413,11 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   basebandFrontend.io.back.interrupt.txFinish := bmc.io.interrupt.txFinish
 
   // Status
-  basebandFrontend.io.back.status.status0 := Cat(bmc.io.state.mainControllerState, bmc.io.state.txControllerState, bmc.io.state.rxControllerState, bmc.io.state.txState, bmc.io.state.disassemblerState, bmc.io.state.assemblerState)
-  // TODO: Other important things to snipe
-  //  ADC input I and Q, LUT codes for AGC I, AGC Q, DCO I, DCO Q, LOCT, LOFSK, PLLD, preambleDetected
-  //  Capture LUT index as first priority, LUT output if space permitting
-
+  basebandFrontend.io.back.status.status0 := Cat(bmc.io.state.imageRejectionOut, bmc.io.state.mainControllerState, bmc.io.state.txControllerState, bmc.io.state.rxControllerState, bmc.io.state.txState, bmc.io.state.disassemblerState, bmc.io.state.assemblerState)
+  basebandFrontend.io.back.status.status1 := Cat(io.data.rx.i.data, bmc.io.state.bandpassF0, bmc.io.state.preambleDetected)
+  basebandFrontend.io.back.status.status2 := Cat(bmc.io.state.accumulatorCount, bmc.io.state.bandpassF1)
+  basebandFrontend.io.back.status.status3 := Cat(io.data.rx.q.data, bmc.io.state.envelopeF1, bmc.io.state.envelopeF0)
+  basebandFrontend.io.back.status.status4 := Cat(bmc.io.state.q.dcoIndex, bmc.io.state.q.agcIndex, bmc.io.state.i.dcoIndex, bmc.io.state.i.agcIndex, bmc.io.state.gfskIndex)
 
   // Other off chip / analog IO
   io.tuning.trim := basebandFrontend.io.tuning.trim

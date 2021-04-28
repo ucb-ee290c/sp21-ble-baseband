@@ -10,6 +10,7 @@ import modem._
 
 class BasebandConstants extends Bundle {
   val channelIndex = UInt(6.W)
+  val physicalIndex = UInt(6.W)
   val crcSeed = UInt(24.W)
   val accessAddress = UInt(32.W)
 }
