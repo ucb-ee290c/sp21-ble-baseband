@@ -115,7 +115,7 @@ object TestUtility {
   }
 
   def analogToDigital(in: Seq[(Double, Double)], f_sample: Double, adcBits: Int = BLEBasebandModemParams().adcBits): Seq[(Int, Int)] = {
-    //val sampled = in.zipWithIndex.collect {case (e,i) if (i % (f_sample / digital_clock_F).toInt) == 0 => e}
+    val sampled = in.zipWithIndex.collect {case (e,i) if (i % (f_sample / digital_clock_F).toInt) == 0 => e}
 
     val range = math.pow(2, adcBits) - 1
     val scaleWeight = range / 0.9

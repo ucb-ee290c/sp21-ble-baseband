@@ -35,6 +35,11 @@ class GFSKRXTestModule(params: BLEBasebandModemParams) extends Module {
   })
   val gfskRX = Module(new GFSKRX(params)).io
 
+  gfskRX.filterCoeffCommand.bits.FIR := 0.U
+  gfskRX.filterCoeffCommand.bits.change.value := 0.U
+  gfskRX.filterCoeffCommand.bits.change.coeff := 0.U
+  gfskRX.filterCoeffCommand.valid := 0.U
+
   val preambleDetected = gfskRX.control.out.preambleDetected
   gfskRX.control.in.imageRejectionControl := 0.U
   gfskRX.control.in.enable := 1.B

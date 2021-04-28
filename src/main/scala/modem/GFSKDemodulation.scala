@@ -15,6 +15,7 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
         val envelopeF0 = UInt((inputBitwidth + 1).W)
         val envelopeF1 = UInt((inputBitwidth + 1).W)
       })
+    val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
   })
 
   /* Bandpass Filters for 0 and 1 frequencies */
@@ -25,6 +26,8 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
       FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
     )
   )
+  bandpassF0.io.coeff.bits := io.filterCoeffCommand.bits.change
+  bandpassF0.io.coeff.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.RX_BANDPASS_F0
 
   val bandpassF1 = Module(
     new GenericFIR(
@@ -33,6 +36,8 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
       FIRCoefficients.GFSKRX_Bandpass_F1_ALT.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
     )
   )
+  bandpassF1.io.coeff.bits := io.filterCoeffCommand.bits.change
+  bandpassF1.io.coeff.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.RX_BANDPASS_F1
 
   bandpassF0.io.in.bits.data := io.signal.bits.asFixedPoint(0.BP)
   io.signal.ready := bandpassF0.io.in.ready
@@ -45,6 +50,12 @@ class GFSKDemodulation(params: BLEBasebandModemParams, inputBitwidth: Int) exten
   /* Envelope Detectors. */
   val envelopeDetectorF0 = Module( new EnvelopeDetector(bandpassF0.io.out.bits.data.getWidth - bandpassF0.io.out.bits.data.binaryPoint.get) )
   val envelopeDetectorF1 = Module( new EnvelopeDetector(bandpassF1.io.out.bits.data.getWidth - bandpassF1.io.out.bits.data.binaryPoint.get) )
+
+  envelopeDetectorF0.io.filterCoeffCommand.bits := io.filterCoeffCommand.bits.change
+  envelopeDetectorF0.io.filterCoeffCommand.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.RX_ENVELOPE_F0
+
+  envelopeDetectorF1.io.filterCoeffCommand.bits := io.filterCoeffCommand.bits.change
+  envelopeDetectorF1.io.filterCoeffCommand.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.RX_ENVELOPE_F1
 
   envelopeDetectorF0.io.in.valid := bandpassF0.io.out.valid
   envelopeDetectorF0.io.in.bits := Utility.roundTowardsZero(bandpassF0.io.out.bits.data)

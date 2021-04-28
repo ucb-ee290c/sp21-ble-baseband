@@ -8,13 +8,23 @@ class EnvelopeDetector(bitWidth: Int) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(SInt(bitWidth.W)))
     val out = Decoupled(UInt((bitWidth + 3).W)) // TODO: Determine width of sum output
+    val filterCoeffCommand = Input(Valid(new FIRCoefficientChange))
   })
 
   val cyclesPerSymbol = 20 // TODO: Make this a MMIO setting
 
   val lowpassFixedPointWeights = FIRCoefficients.envelopeDetector.map(c => FixedPoint.fromDouble(c, 16.W, 15.BP))
   // TODO: Check the output width
-  val lowpass = Module(new GenericFIR(FixedPoint((bitWidth + 1).W, 0.BP), FixedPoint((bitWidth + 18).W, 15.BP), lowpassFixedPointWeights))
+  val lowpass = Module(
+    new GenericFIR(
+      FixedPoint((bitWidth + 1).W, 0.BP),
+      FixedPoint((bitWidth + 18).W, 15.BP),
+      lowpassFixedPointWeights
+    )
+  )
+  lowpass.io.coeff.bits := io.filterCoeffCommand.bits
+  lowpass.io.coeff.valid := io.filterCoeffCommand.valid
+
   lowpass.io.in.valid := io.in.valid
   lowpass.io.in.bits.data := Cat(0.U(1.W), io.in.bits.abs()).asFixedPoint(0.BP) // Take absolute value and ensure output as fixed point is interpreted properly
   io.in.ready := lowpass.io.in.ready

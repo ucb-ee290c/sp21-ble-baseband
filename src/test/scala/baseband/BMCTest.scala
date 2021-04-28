@@ -422,7 +422,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
 
       // Set the appropriate tuning parameters
-      c.io.tuning.control.imageRejectionOp.poke(0.B)
+      c.io.tuning.control.imageRejectionControl.poke(0.U)
       c.io.tuning.control.preambleDetectionThreshold.poke(140.U)
       for (i <- 0 until tests) {
         val channelIndex = 0

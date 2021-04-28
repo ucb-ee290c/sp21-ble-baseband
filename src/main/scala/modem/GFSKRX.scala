@@ -12,6 +12,10 @@ class GFSKRXControlInputBundle extends Bundle {
   val preambleDetectionThreshold = UInt(8.W)
 }
 
+class GFSKRXFilterCoefficients extends Bundle {
+  val hilbertFilter = Vec(FIRCoefficients.Hilbert.size, FixedPoint(12.W, 11.BP))
+}
+
 class GFSKRXControlOutputBundle extends Bundle {
   val preambleDetected = Bool()
 }
@@ -37,6 +41,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
       val dmodOut = ()
       val accumulatorCount = Output(SInt(accumulatorWidth.W))
     }
+    val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
   })
 
   /* Hilbert Filter for digital Image Rejection */
@@ -49,6 +54,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.control.IonLHS := io.control.in.imageRejectionControl(1).asBool()
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
+  imageRejection.io.filterCoeffCommand := io.filterCoeffCommand
 
   /* GFSK Demodulation from recovered signal */
   val guess = Wire(Bool())
@@ -58,6 +64,7 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.out.ready := demod.io.signal.ready
   demod.io.guess.ready := io.control.in.enable && io.digital.out.ready
   guess := demod.io.guess.bits
+  demod.io.filterCoeffCommand := io.filterCoeffCommand
 
   /* Clock and Data Recovery */
   val cdr = Module(new FPSCDR)

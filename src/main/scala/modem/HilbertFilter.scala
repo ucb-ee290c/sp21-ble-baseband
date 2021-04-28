@@ -15,12 +15,12 @@ class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
     val i = Flipped(Decoupled(UInt(params.adcBits.W)))
     val q = Flipped(Decoupled(UInt(params.adcBits.W)))
   }
+  val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
   val out = Decoupled(SInt((params.adcBits + 3).W))
 }
 
 class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   var io = IO(new HilbertFilterIO(params))
-
   // Make the inputs I and Q into signed integers centered around 0.
   val I_scaled = Wire(SInt((params.adcBits + 1).W))
   val Q_scaled = Wire(SInt((params.adcBits + 1).W))
@@ -29,7 +29,6 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   Q_scaled := Cat(0.U(1.W), io.in.q.bits).asSInt() - midpoint.S((params.adcBits + 1).W)
 
   var coeffs = FIRCoefficients.Hilbert.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
-
   // The input I should be synchronized with the middle of the FIR hilbert filter for Q, so it should be delayed.
   val I_delayed = ShiftRegister(I_scaled, coeffs.length / 2 + 1)
   val I_valid_delayed = ShiftRegister(io.in.i.valid, coeffs.length / 2 + 1) // the input valid is synchronized with the input
@@ -40,6 +39,8 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
       FixedPoint((12 + (params.adcBits + 1)).W, 11.BP),
       coeffs)
   )
+  fir.io.coeff.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.HILBERT_FILTER
+  fir.io.coeff.bits := io.filterCoeffCommand.bits.change
   fir.io.in.valid := io.in.q.valid
   fir.io.in.bits.data := Q_scaled.asFixedPoint(0.BP)
   fir.io.out.ready := io.out.ready

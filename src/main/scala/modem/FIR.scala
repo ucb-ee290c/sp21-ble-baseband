@@ -5,57 +5,86 @@ package modem
 import chisel3._
 import chisel3.util._
 import dsptools.numbers._
+import chisel3.experimental.FixedPoint
 
-class GenericFIRCellBundle[T<:Data:Ring](genIn:T, genOut:T) extends Bundle {
-  val data: T = genIn.cloneType
-  val carry: T = genOut.cloneType
+object FIRCodes {
+  val HILBERT_FILTER = 0.U
+  val RX_BANDPASS_F0 = 1.U
+  val RX_BANDPASS_F1 = 2.U
+  val RX_ENVELOPE_F0 = 3.U
+  val RX_ENVELOPE_F1 = 4.U
+}
+
+class FIRCoefficientChangeCommand extends Bundle {
+  /* LUT Command: used to write to a LUT within the modem.
+    [31:10 - Value to be written to LUT | 9:4 - address in LUT | 3:0 - LUT index]
+   */
+  val FIR = UInt(4.W)
+  val change = new FIRCoefficientChange
+}
+
+class FIRCoefficientChange extends Bundle {
+  val coeff = UInt(6.W)
+  val value = UInt(22.W)
+}
+
+class GenericFIRCellBundle(genIn:FixedPoint, genOut:FixedPoint) extends Bundle {
+  val data: FixedPoint = genIn.cloneType
+  val carry: FixedPoint = genOut.cloneType
 
   override def cloneType: this.type = GenericFIRCellBundle(genIn, genOut).asInstanceOf[this.type]
 }
 object GenericFIRCellBundle {
-  def apply[T<:Data:Ring](genIn:T, genOut:T): GenericFIRCellBundle[T] = new GenericFIRCellBundle(genIn, genOut)
+  def apply(genIn:FixedPoint, genOut:FixedPoint): GenericFIRCellBundle = new GenericFIRCellBundle(genIn, genOut)
 }
 
-class GenericFIRCellIO[T<:Data:Ring](genIn:T, genOut:T, c:T) extends Bundle {
+class GenericFIRCellIO(genIn:FixedPoint, genOut:FixedPoint, c:FixedPoint) extends Bundle {
   val coeff = Input(c.cloneType)
   val in = Flipped(Decoupled(GenericFIRCellBundle(genIn, genOut)))
   val out = Decoupled(GenericFIRCellBundle(genIn, genOut))
 }
 object GenericFIRCellIO {
-  def apply[T<:Data:Ring](genIn:T, genOut:T, c:T): GenericFIRCellIO[T] = new GenericFIRCellIO(genIn, genOut, c)
+  def apply(genIn:FixedPoint, genOut:FixedPoint, c:FixedPoint): GenericFIRCellIO = new GenericFIRCellIO(genIn, genOut, c)
 }
 
-class GenericFIRBundle[T<:Data:Ring](proto: T) extends Bundle {
-  val data: T = proto.cloneType
+class GenericFIRBundle(proto: FixedPoint) extends Bundle {
+  val data: FixedPoint = proto.cloneType
 
   override def cloneType: this.type = GenericFIRBundle(proto).asInstanceOf[this.type]
 }
 object GenericFIRBundle {
-  def apply[T<:Data:Ring](proto: T): GenericFIRBundle[T] = new GenericFIRBundle(proto)
+  def apply(proto: FixedPoint): GenericFIRBundle = new GenericFIRBundle(proto)
 }
 
-class GenericFIRIO[T<:Data:Ring](genIn:T, genOut:T) extends Bundle {
+class GenericFIRIO(genIn:FixedPoint, genOut:FixedPoint) extends Bundle {
   val in = Flipped(Decoupled(GenericFIRBundle(genIn)))
   val out = Decoupled(GenericFIRBundle(genOut))
+  val coeff = Input(Valid(new FIRCoefficientChange))
 }
 object GenericFIRIO {
-  def apply[T<:Data:Ring](genIn:T, genOut:T): GenericFIRIO[T] = new GenericFIRIO(genIn, genOut)
+  def apply(genIn:FixedPoint, genOut:FixedPoint): GenericFIRIO = new GenericFIRIO(genIn, genOut)
 }
 
-class GenericFIR[T<:Data:Ring](genIn:T, genOut:T, coeffs: Seq[T]) extends Module {
+class GenericFIR(genIn:FixedPoint, genOut:FixedPoint, coeffs: Seq[FixedPoint]) extends Module {
   val io = IO(GenericFIRIO(genIn, genOut))
 
   // Construct a vector of genericFIRDirectCells
   val directCells = Seq.tabulate(coeffs.length){ i: Int => Module(new GenericFIRDirectCell(genIn, genOut, coeffs(i))).io }
 
+  val coeffRegs = RegInit(VecInit(coeffs))
+
+  when (io.coeff.fire()) {
+    coeffRegs(io.coeff.bits.coeff) := io.coeff.bits.value(coeffs.head.getWidth - 1, 0).asFixedPoint(coeffs.head.binaryPoint)
+  }
+
   // Construct the direct FIR chain
-  for ((cell, coeff) <- directCells.zip(coeffs)) {
-    cell.coeff := coeff
+  for ((cell, i) <- directCells.zip(coeffs.indices)) {
+    cell.coeff := coeffRegs(i)
   }
 
   // Connect input to first cell
   directCells.head.in.bits.data := io.in.bits.data
-  directCells.head.in.bits.carry := Ring[T].zero
+  directCells.head.in.bits.carry := Ring[FixedPoint].zero
   directCells.head.in.valid := io.in.valid
   io.in.ready := directCells.head.in.ready
 
@@ -88,7 +117,7 @@ class GenericFIR[T<:Data:Ring](genIn:T, genOut:T, coeffs: Seq[T]) extends Module
 //   carryIn --[+]-- carryOut
 //
 // DOC include start: GenericFIRDirectCell chisel
-class GenericFIRDirectCell[T<:Data:Ring](genIn: T, genOut: T, c: T) extends Module {
+class GenericFIRDirectCell(genIn: FixedPoint, genOut: FixedPoint, c: FixedPoint) extends Module {
   val io = IO(GenericFIRCellIO(genIn, genOut, c))
 
   // Registers to delay the input and the valid to propagate with calculations

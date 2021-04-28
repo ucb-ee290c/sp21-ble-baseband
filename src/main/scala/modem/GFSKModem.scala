@@ -138,6 +138,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
     val constants = Input(new BasebandConstants)
     val control = new GFSKModemControlIO(params)
     val lutCmd = Flipped(Decoupled(new GFSKModemLUTCommand))
+    val filterCoeffCommand = Input(Valid(new FIRCoefficientChangeCommand))
     val tuning = new Bundle {
       val data = new Bundle {
         val i = new Bundle {
