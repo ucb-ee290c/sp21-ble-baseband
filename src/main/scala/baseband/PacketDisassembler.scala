@@ -113,7 +113,7 @@ class PacketDisassembler extends Module {
   val dewhite_data = Wire(UInt(1.W))
   val dewhite_valid = Wire(Bool())
   val dewhite_result = Wire(UInt(1.W))
-  val dewhite_seed = Cat(Reverse(io.constants.physicalIndex), 1.U(1.W)) // TODO: Verify this
+  val dewhite_seed = Cat(Reverse(io.constants.channelIndex), 1.U(1.W)) // TODO: Verify this
   // TODO: Make sure to change the WHITENER TOO!
 
 
