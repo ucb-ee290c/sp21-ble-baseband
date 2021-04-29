@@ -146,3 +146,77 @@ class GenericFIRDirectCell(genIn: FixedPoint, genOut: FixedPoint, c: FixedPoint)
   // (a * b) maps to (Ring[T].prod(a, b)) for whicever T you use
   io.out.bits.carry := inputReg * io.coeff + io.in.bits.carry
 }
+
+class FixedPointFIRTransposeCellOutputIO(genIn: FixedPoint, genOut: FixedPoint) extends Bundle {
+  val sample = Decoupled(genIn.cloneType)
+  val sum = Decoupled(genOut.cloneType)
+
+  override def cloneType: this.type = (new FixedPointFIRTransposeCellOutputIO(genIn, genOut)).asInstanceOf[this.type]
+}
+
+class FixedPointFIRTransposeCellIO(genIn:FixedPoint, genOut:FixedPoint, c:FixedPoint) extends Bundle {
+  val coeff = Input(c.cloneType)
+  val in = Flipped(new FixedPointFIRTransposeCellOutputIO(genIn, genOut))
+  val out = new FixedPointFIRTransposeCellOutputIO(genIn, genOut)
+}
+
+class FixedPointFIRTransposeCell(genIn: FixedPoint, genOut: FixedPoint, c: FixedPoint) extends Module {
+  val io = IO(new FixedPointFIRTransposeCellIO(genIn, genOut, c))
+
+  val sumValid = RegInit(false.B)
+  val sumReg = Reg(genOut.cloneType)
+
+  when(io.in.sample.fire() & io.in.sum.fire()) {
+    sumReg :=  io.in.sample.bits * io.coeff + io.in.sum.bits
+    sumValid := true.B
+  }
+
+  // Sample signals
+  io.in.sample.ready := io.out.sample.ready
+  io.out.sample.valid := io.in.sample.valid
+  io.out.sample.bits := io.in.sample.bits
+
+  // Sum signals
+  io.in.sum.ready := io.out.sum.ready
+  io.out.sum.valid := sumValid & io.in.sum.valid
+  io.out.sum.bits := sumReg
+}
+
+class FixedPointTransposeFIRIO(genIn: FixedPoint, genOut: FixedPoint) extends Bundle {
+  val in = Flipped(Decoupled(genIn.cloneType))
+  val out = Decoupled(genOut.cloneType)
+  val coeff = Flipped(Valid(new FIRCoefficientChange))
+}
+
+class FixedPointTransposeFIR(genIn: FixedPoint, genOut: FixedPoint, coeffs: Seq[FixedPoint]) extends Module {
+  val io = IO(new FixedPointTransposeFIRIO(genIn, genOut))
+
+  val transposeCells = Seq.tabulate(coeffs.length){ i: Int => Module(new FixedPointFIRTransposeCell(genIn, genOut, coeffs(i))).io }
+
+  val coeffRegs = RegInit(VecInit(coeffs))
+
+  when (io.coeff.fire()) {
+    coeffRegs(io.coeff.bits.coeff) := io.coeff.bits.value(coeffs.head.getWidth - 1, 0).asFixedPoint(coeffs.head.binaryPoint)
+  }
+  
+  transposeCells.zip(coeffs.indices.reverse) // Reverse coeff order for transpose FIR
+    .foreach { case (cell, i) =>
+      cell.coeff := coeffRegs(i)
+    }
+
+  transposeCells.head.in.sample <> io.in
+
+  transposeCells.head.in.sum.valid := io.in.valid
+  transposeCells.head.in.sum.bits := Ring[FixedPoint].zero
+
+  transposeCells.zip(transposeCells.tail)
+    .foreach{ case (current, next ) =>
+      next.in.sample <> current.out.sample
+      next.in.sum <> current.out.sum
+    }
+
+  transposeCells.last.out.sample.ready := io.out.ready
+
+  io.out <> transposeCells.last.out.sum
+
+}
