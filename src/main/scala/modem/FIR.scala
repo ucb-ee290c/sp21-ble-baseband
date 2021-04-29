@@ -220,3 +220,35 @@ class FixedPointTransposeFIR(genIn: FixedPoint, genOut: FixedPoint, coeffs: Seq[
   io.out <> transposeCells.last.out.sum
 
 }
+
+class ConstantFixedPointTransposeFIRIO(genIn: FixedPoint, genOut: FixedPoint) extends Bundle {
+  val in = Flipped(Decoupled(genIn.cloneType))
+  val out = Decoupled(genOut.cloneType)
+}
+
+class ConstantFixedPointTransposeFIR(genIn: FixedPoint, genOut: FixedPoint, coeffs: Seq[FixedPoint]) extends Module {
+  val io = IO(new ConstantFixedPointTransposeFIRIO(genIn, genOut))
+
+  val transposeCells = Seq.tabulate(coeffs.length){ i: Int => Module(new FixedPointFIRTransposeCell(genIn, genOut, coeffs(i))).io }
+
+  transposeCells.zip(coeffs.reverse) // Reverse coeff order for transpose FIR
+    .foreach { case (cell, coeff) =>
+      cell.coeff := coeff
+    }
+
+  transposeCells.head.in.sample <> io.in
+
+  transposeCells.head.in.sum.valid := io.in.valid
+  transposeCells.head.in.sum.bits := Ring[FixedPoint].zero
+
+  transposeCells.zip(transposeCells.tail)
+    .foreach{ case (current, next ) =>
+      next.in.sample <> current.out.sample
+      next.in.sum <> current.out.sum
+    }
+
+  transposeCells.last.out.sample.ready := io.out.ready
+
+  io.out <> transposeCells.last.out.sum
+
+}
