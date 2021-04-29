@@ -55,13 +55,13 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
   val firInData = RegInit(0.F(2.W, 0.BP))
 
   val firWeights = FIRCoefficients.gaussianWeights.map(w => FixedPoint.fromDouble(w, 8.W, 6.BP))
-  val fir = Module(new GenericFIR(FixedPoint(2.W, 0.BP), FixedPoint(11.W, 6.BP), firWeights))
+  val fir = Module(new FixedPointTransposeFIR(FixedPoint(2.W, 0.BP), FixedPoint(11.W, 6.BP), firWeights))
   fir.io.coeff.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.TX_GAUSSIAN
   fir.io.coeff.bits := io.filterCoeffCommand.bits.change
 
 
   fir.io.in.valid := firInValid
-  fir.io.in.bits.data := firInData
+  fir.io.in.bits := firInData
   fir.io.out.ready := state === s_working
 
   io.digital.in.ready := state === s_working && counter === 0.U && sentBytes < totalBytes
@@ -115,6 +115,6 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
     }
   }
 
-  val firOut = fir.io.out.bits.data
+  val firOut = fir.io.out.bits
   io.analog.gfskIndex := Mux(state === s_working, firOut(firOut.getWidth - 1, firOut.getWidth - 6), 0.U)
 }

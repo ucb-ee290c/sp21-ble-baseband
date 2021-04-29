@@ -198,7 +198,7 @@ class FixedPointTransposeFIR(genIn: FixedPoint, genOut: FixedPoint, coeffs: Seq[
   when (io.coeff.fire()) {
     coeffRegs(io.coeff.bits.coeff) := io.coeff.bits.value(coeffs.head.getWidth - 1, 0).asFixedPoint(coeffs.head.binaryPoint)
   }
-  
+
   transposeCells.zip(coeffs.indices.reverse) // Reverse coeff order for transpose FIR
     .foreach { case (cell, i) =>
       cell.coeff := coeffRegs(i)
