@@ -12,10 +12,6 @@ class GFSKRXControlInputBundle extends Bundle {
   val preambleDetectionThreshold = UInt(8.W)
 }
 
-class GFSKRXFilterCoefficients extends Bundle {
-  val hilbertFilter = Vec(FIRCoefficients.Hilbert.size, FixedPoint(12.W, 11.BP))
-}
-
 class GFSKRXControlOutputBundle extends Bundle {
   val preambleDetected = Bool()
 }
@@ -57,7 +53,6 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.control.IonTop := io.control.in.imageRejectionControl(2).asBool()
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
-  imageRejection.io.filterCoeffCommand := io.filterCoeffCommand
 
   /* GFSK Demodulation from recovered signal */
   val guess = Wire(Bool())

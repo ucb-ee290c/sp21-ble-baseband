@@ -16,7 +16,6 @@ class HilbertFilterIO(params: BLEBasebandModemParams) extends Bundle {
     val i = Flipped(Decoupled(UInt(params.adcBits.W)))
     val q = Flipped(Decoupled(UInt(params.adcBits.W)))
   }
-  val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChangeCommand))
   val out = Decoupled(SInt((params.adcBits + 3).W))
 }
 
@@ -35,21 +34,21 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
                   Cat(0.U(1.W), io.in.q.bits).asSInt() - midpoint.S((params.adcBits + 1).W),
                   Cat(0.U(1.W), io.in.i.bits).asSInt() - midpoint.S((params.adcBits + 1).W))
 
-  var coeffs = FIRCoefficients.Hilbert.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))
+  var coeffs = FIRCoefficients.GFSKRX_Hilbert_Filter.coefficients.map(c =>
+      FixedPoint.fromDouble(c, FIRCoefficients.GFSKRX_Hilbert_Filter.width.W, FIRCoefficients.GFSKRX_Hilbert_Filter.binaryPoint.BP)
+  )
   // The input I should be synchronized with the middle of the FIR hilbert filter for Q, so it should be delayed.
   val I_delayed = ShiftRegister(I_scaled, coeffs.length / 2 + 1)
   val I_valid_delayed = ShiftRegister(io.in.i.valid, coeffs.length / 2 + 1) // the input valid is synchronized with the input
 
   var fir = Module(
-    new GenericFIR(
+    new ConstantFixedPointTransposeFIR(
       FixedPoint((params.adcBits + 1).W, 0.BP),
-      FixedPoint((12 + (params.adcBits + 1)).W, 11.BP),
+      FixedPoint((FIRCoefficients.GFSKRX_Hilbert_Filter.width + (params.adcBits + 1)).W, FIRCoefficients.GFSKRX_Hilbert_Filter.binaryPoint.BP),
       coeffs)
   )
-  fir.io.coeff.valid := io.filterCoeffCommand.valid && io.filterCoeffCommand.bits.FIR === FIRCodes.HILBERT_FILTER
-  fir.io.coeff.bits := io.filterCoeffCommand.bits.change
   fir.io.in.valid := io.in.q.valid
-  fir.io.in.bits.data := Q_scaled.asFixedPoint(0.BP)
+  fir.io.in.bits := Q_scaled.asFixedPoint(0.BP)
   fir.io.out.ready := io.out.ready
 
   io.out.valid := fir.io.out.valid & I_valid_delayed
@@ -58,15 +57,12 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
 
   io.out.bits := Mux(!io.control.IonLHS,
     Mux(io.control.operation,
-    I_delayed +& Utility.roundTowardsZero(fir.io.out.bits.data),
-    I_delayed -& Utility.roundTowardsZero(fir.io.out.bits.data)),
+    I_delayed +& Utility.roundTowardsZero(fir.io.out.bits),
+    I_delayed -& Utility.roundTowardsZero(fir.io.out.bits)),
     Mux(io.control.operation,
-      Utility.roundTowardsZero(fir.io.out.bits.data) +& I_delayed,
-      Utility.roundTowardsZero(fir.io.out.bits.data) -& I_delayed)
+      Utility.roundTowardsZero(fir.io.out.bits) +& I_delayed,
+      Utility.roundTowardsZero(fir.io.out.bits) -& I_delayed)
   )
-
-
-
   // Is the filter ready to take in the inputs?
   io.in.i.ready := fir.io.in.ready
   io.in.q.ready := fir.io.in.ready

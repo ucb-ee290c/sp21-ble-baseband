@@ -53,6 +53,38 @@ HB_coeff = [-0.031913481327039881774165763772543868981,
  0.026040505746412527521282953557602013461,
 -0.000000000000001668636439779710674245322,
  0.031913481327039881774165763772543868981]
+ 
+HB_coeff = [0.0,
+      0.0,
+      0.0,
+      0.002,
+      0.0,
+      0.008,
+      0.0,
+      0.026,
+      0.0,
+      0.068,
+      0.0,
+      0.17,
+      0.0,
+      0.6212,
+      0.0,
+      -0.6212,
+      0.0,
+      -0.17,
+      0.0,
+      -0.068,
+      0.0,
+      -0.026,
+      0.0,
+      -0.008,
+      0.0,
+      -0.002,
+      0.0,
+      0.0,
+      0.0]
+      
+print([float(FixedPoint(c, True, 1, 9, str_base=2)) for c in HB_coeff])
 """ Method of obtaining Hilbert Transform FIR coefficients
 https://www.wirelessinnovation.org/assets/Proceedings/2011/2011-1b-carrick.pdf
 """
@@ -61,7 +93,7 @@ https://www.wirelessinnovation.org/assets/Proceedings/2011/2011-1b-carrick.pdf
 #HB_coeff = [0.0, 0.0, 0.0, 0.002, 0.0, 0.008, 0.0, 0.026, 0.0, 0.068, 0.0, 0.17, 0.0, 0.6212, 0.0, -0.6212, 0.0, -0.17, 0.0, -0.068, 0.0, -0.026, 0.0, -0.008, 0.0, -0.002, 0.0, 0.0, 0.0]
 
 #HB_coeff = [FixedPoint(c, True, 1, 11, str_base=2) for c in HB_coeff]
-print(['b' + str(c) for c in HB_coeff])
+#print(['b' + str(c) for c in HB_coeff])
 def butter_lowpass(cutoff, fs, order=5):
     sos = signal.butter(10, cutoff, 'lp', fs=fs, output='sos')
     return sos
@@ -146,6 +178,8 @@ I = [s - 15 for s in result[1]]
 result = ADC_sampling(Q, MHz(20), analog_F_sample)
 print("q = ", result[1])
 Q = [s - 15 for s in result[1]]
+
+
 
 
 ht = hilbert_transform(Q)
