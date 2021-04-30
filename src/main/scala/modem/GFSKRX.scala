@@ -44,6 +44,8 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   /* Hilbert Filter for digital Image Rejection */
   val imageRejection = Module (new HilbertFilter(params))
+  imageRejection.io.filterCoeffCommand := io.filterCoeffCommand
+
   imageRejection.io.in.i.valid := io.analog.i.valid
   imageRejection.io.in.q.valid := io.analog.q.valid
   imageRejection.io.in.i.bits := io.analog.i.bits

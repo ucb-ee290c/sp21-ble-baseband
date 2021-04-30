@@ -8,7 +8,7 @@ import dsptools.numbers._
 import chisel3.experimental.FixedPoint
 
 object FIRCodes {
-  val HILBERT_FILTER = 0.U
+  val RX_HILBERT_FILTER = 0.U
   val RX_BANDPASS_F0 = 1.U
   val RX_BANDPASS_F1 = 2.U
   val RX_ENVELOPE = 3.U

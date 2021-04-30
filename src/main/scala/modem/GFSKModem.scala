@@ -208,6 +208,7 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
 
   val tx = Module(new GFSKTX(params))
   tx.io.control <> io.control.tx
+  tx.io.filterCoeffCommand := io.filterCoeffCommand
 
   val txQueue = Queue(io.digital.tx, params.modemQueueDepth)
   tx.io.digital.in <> txQueue
