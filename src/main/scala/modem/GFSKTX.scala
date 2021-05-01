@@ -30,6 +30,7 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
     }
     val control = new GFSKTXControlIO(params)
     val state = Output(UInt(log2Ceil(2+1).W))
+    val filterCoeffCommand = Flipped(Valid(new FIRCoefficientChangeCommand))
   })
 
   private val maxPacketSize = 1 + 4 + params.maxReadSize + 3
@@ -53,8 +54,20 @@ class GFSKTX(params: BLEBasebandModemParams) extends Module {
   val firInValid = RegInit(false.B)
   val firInData = RegInit(0.F(2.W, 0.BP))
 
-  val firWeights = FIRCoefficients.gaussianWeights.map(w => FixedPoint.fromDouble(w, 8.W, 6.BP))
-  val fir = Module(new ConstantFixedPointTransposeFIR(FixedPoint(2.W, 0.BP), FixedPoint(11.W, 6.BP), firWeights))
+  val gaussWidth = FIRCoefficients.GFSKTX_Gaussian_Filter.width
+  val gaussBP = FIRCoefficients.GFSKTX_Gaussian_Filter.binaryPoint
+  val gaussCoeffs = RegInit(VecInit(FIRCoefficients.GFSKTX_Gaussian_Filter.coefficients.map(c => FixedPoint.fromDouble(c, gaussWidth.W, gaussBP.BP))))
+
+  when (io.filterCoeffCommand.fire() && io.filterCoeffCommand.bits.FIR === FIRCodes.TX_GAUSSIAN) {
+    gaussCoeffs(io.filterCoeffCommand.bits.change.coeff) := io.filterCoeffCommand.bits.change.value(gaussWidth - 1, 0).asFixedPoint(gaussBP.BP)
+  }
+
+  val fir = Module(new FixedPointTransposeFIR(
+    FixedPoint(2.W, 0.BP),
+    FixedPoint(11.W, 6.BP),
+    FixedPoint(gaussWidth.W, gaussBP.BP),
+    FIRCoefficients.GFSKTX_Gaussian_Filter.coefficients.length))
+  fir.io.coeff := gaussCoeffs
 
   fir.io.in.valid := firInValid
   fir.io.in.bits := firInData

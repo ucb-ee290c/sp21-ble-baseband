@@ -12,10 +12,6 @@ class GFSKRXControlInputBundle extends Bundle {
   val preambleDetectionThreshold = UInt(8.W)
 }
 
-class GFSKRXFilterCoefficients extends Bundle {
-  val hilbertFilter = Vec(FIRCoefficients.Hilbert.size, FixedPoint(12.W, 11.BP))
-}
-
 class GFSKRXControlOutputBundle extends Bundle {
   val preambleDetected = Bool()
 }
@@ -48,6 +44,8 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   /* Hilbert Filter for digital Image Rejection */
   val imageRejection = Module (new HilbertFilter(params))
+  imageRejection.io.filterCoeffCommand := io.filterCoeffCommand
+
   imageRejection.io.in.i.valid := io.analog.i.valid
   imageRejection.io.in.q.valid := io.analog.q.valid
   imageRejection.io.in.i.bits := io.analog.i.bits
@@ -57,7 +55,6 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.control.IonTop := io.control.in.imageRejectionControl(2).asBool()
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
-  imageRejection.io.filterCoeffCommand := io.filterCoeffCommand
 
   /* GFSK Demodulation from recovered signal */
   val guess = Wire(Bool())
@@ -84,8 +81,15 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   /* Preamble Detection */
   val preambleDetector = Module(new PreambleDetector())
-  val preambleDetected = RegInit(0.B) // TODO: Reset these when needed.
+  val preambleDetected = RegInit(0.B)
   val preambleValid = RegInit(0.B)
+
+  /* Reset the preamble detector when the modem enters RX */
+  when (Utility.risingedge(io.control.in.enable)) {
+    preambleDetected := 0.B
+    preambleValid := 0.B
+  }
+
   preambleDetector.io.control.firstBit := io.control.in.accessAddressLSB
   preambleDetector.io.in := guess
   preambleDetector.io.control.threshold := io.control.in.preambleDetectionThreshold

@@ -8,11 +8,11 @@ import dsptools.numbers._
 import chisel3.experimental.FixedPoint
 
 object FIRCodes {
-  val HILBERT_FILTER = 0.U
-  val RX_BANDPASS_F0 = 1.U
-  val RX_BANDPASS_F1 = 2.U
-  val RX_ENVELOPE_F0 = 3.U
-  val RX_ENVELOPE_F1 = 4.U
+  val NONE = 0.U
+  val RX_HILBERT_FILTER = 1.U
+  val RX_BANDPASS_F0 = 2.U
+  val RX_BANDPASS_F1 = 3.U
+  val RX_ENVELOPE = 4.U
   val TX_GAUSSIAN = 5.U
 }
 
@@ -182,26 +182,20 @@ class FixedPointFIRTransposeCell(genIn: FixedPoint, genOut: FixedPoint, c: Fixed
   io.out.sum.bits := sumReg
 }
 
-class FixedPointTransposeFIRIO(genIn: FixedPoint, genOut: FixedPoint) extends Bundle {
+class FixedPointTransposeFIRIO(genIn: FixedPoint, genOut: FixedPoint, coeffIn: FixedPoint, n: Int) extends Bundle {
   val in = Flipped(Decoupled(genIn.cloneType))
   val out = Decoupled(genOut.cloneType)
-  val coeff = Flipped(Valid(new FIRCoefficientChange))
+  val coeff = Input(Vec(n, coeffIn))
 }
 
-class FixedPointTransposeFIR(genIn: FixedPoint, genOut: FixedPoint, coeffs: Seq[FixedPoint]) extends Module {
-  val io = IO(new FixedPointTransposeFIRIO(genIn, genOut))
+class FixedPointTransposeFIR(genIn: FixedPoint, genOut: FixedPoint, coeffIn: FixedPoint, coeffsN: Int) extends Module {
+  val io = IO(new FixedPointTransposeFIRIO(genIn, genOut, coeffIn, coeffsN))
 
-  val transposeCells = Seq.tabulate(coeffs.length){ i: Int => Module(new FixedPointFIRTransposeCell(genIn, genOut, coeffs(i))).io }
+  val transposeCells = Seq.tabulate(coeffsN){ i: Int => Module(new FixedPointFIRTransposeCell(genIn, genOut, coeffIn)).io }
 
-  val coeffRegs = RegInit(VecInit(coeffs))
-
-  when (io.coeff.fire()) {
-    coeffRegs(io.coeff.bits.coeff) := io.coeff.bits.value(coeffs.head.getWidth - 1, 0).asFixedPoint(coeffs.head.binaryPoint)
-  }
-
-  transposeCells.zip(coeffs.indices.reverse) // Reverse coeff order for transpose FIR
+  transposeCells.zip(io.coeff.indices.reverse) // Reverse coeff order for transpose FIR
     .foreach { case (cell, i) =>
-      cell.coeff := coeffRegs(i)
+      cell.coeff := io.coeff(i)
     }
 
   transposeCells.head.in.sample <> io.in

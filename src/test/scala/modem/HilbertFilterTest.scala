@@ -57,8 +57,6 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
-      print("Output:\n")
-      print(arr)
       val f = Figure()
       val p = f.subplot(0)
       p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "b")
@@ -76,6 +74,7 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
       val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
       val bits = Seq(0,0,0,0,0,0) ++ preamble ++ TestUtility.whiten(packet, 0) ++ Seq(0,0,0,0,0,0,0)
       val input = TestUtility.testWaveform(bits, TestUtility.F_IM,  imageAmplitude = 1, signalAmplitude = 0)
+      val inputSignalPeakToPeak = input.map {_._1}.max - input.map {_._1}.min
       while (i < input.length) {
         c.io.in.i.bits.poke(input(i)._1.asUInt())
         c.io.in.q.bits.poke(input(i)._2.asUInt())
@@ -86,12 +85,40 @@ class HilbertFilterTest extends AnyFlatSpec with ChiselScalatestTester {
           arr = arr ++ Seq(c.io.out.bits.peek().litValue())
         i+=1
       }
-      print("Output:\n")
-      print(arr)
+      val outputSignalPeakToPeak = arr.max - arr.min
       val f = Figure()
       val p = f.subplot(0)
       p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "r")
-      assert(true)
+      assert(outputSignalPeakToPeak < inputSignalPeakToPeak / 10)
+    }
+  }
+
+  it should "Work after being reprogrammed" in {
+    test(new HilbertFilter(new BLEBasebandModemParams)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+      c.io.out.ready.poke(1.B)
+      var arr = Seq[BigInt]()
+      var i = 0
+      val numberOfBits = 20
+      val preamble = Seq(1,0,1,0,1,0,1,0)
+      val packet = Seq.tabulate(numberOfBits){_ => Random.nextInt(2)}
+      val bits = Seq(0,0,0,0,0,0) ++ preamble ++ TestUtility.whiten(packet, 0) ++ Seq(0,0,0,0,0,0,0)
+      val input = TestUtility.testWaveform(bits, TestUtility.F_IM,  imageAmplitude = 1, signalAmplitude = 0)
+      val inputSignalPeakToPeak = input.map {_._1}.max - input.map {_._1}.min
+      while (i < input.length) {
+        c.io.in.i.bits.poke(input(i)._1.asUInt())
+        c.io.in.q.bits.poke(input(i)._2.asUInt())
+        c.io.in.i.valid.poke((i < input.length).asBool())
+        c.io.in.q.valid.poke((i < input.length).asBool())
+        c.clock.step()
+        if (c.io.out.valid.peek().litToBoolean)
+          arr = arr ++ Seq(c.io.out.bits.peek().litValue())
+        i+=1
+      }
+      val outputSignalPeakToPeak = arr.max - arr.min
+      val f = Figure()
+      val p = f.subplot(0)
+      p += plot(Seq.tabulate(arr.size)(i => i), arr.map {_.toInt}, colorcode = "r")
+      assert(outputSignalPeakToPeak < inputSignalPeakToPeak / 10)
     }
   }
 

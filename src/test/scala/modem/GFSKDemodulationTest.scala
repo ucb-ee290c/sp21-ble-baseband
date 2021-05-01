@@ -40,33 +40,69 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.in.q.bits := io.analog.q.bits
   imageRejection.io.control.operation := 0.B
   imageRejection.io.control.IonLHS := 0.B
+  imageRejection.io.control.IonTop := 0.B
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
+  imageRejection.io.filterCoeffCommand.valid := 0.B
+  imageRejection.io.filterCoeffCommand.bits.FIR := 0.U
+  imageRejection.io.filterCoeffCommand.bits.change.coeff := 0.U
+  imageRejection.io.filterCoeffCommand.bits.change.value := 0.U
 
-  val bandpassF0 = Module( new GenericFIR(FixedPoint(10.W, 0.BP), FixedPoint(23.W, 11.BP),
-    FIRCoefficients.GFSKRX_Bandpass_F0.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
 
-  val bandpassF1 = Module( new GenericFIR(FixedPoint(10.W, 0.BP), FixedPoint(23.W, 11.BP),
-    FIRCoefficients.GFSKRX_Bandpass_F1_ALT.map(c => FixedPoint.fromDouble(c, 12.W, 11.BP))) )
+  val bandpassF0Width = FIRCoefficients.GFSKRX_Bandpass_F0.width
+  val bandpassF0BP = FIRCoefficients.GFSKRX_Bandpass_F0.binaryPoint
+  val bandpassF0Coeffs = RegInit(VecInit(FIRCoefficients.GFSKRX_Bandpass_F0.coefficients.map(c => FixedPoint.fromDouble(c, bandpassF0Width.W, bandpassF0BP.BP))))
+
+  /* Bandpass Filters for 0 and 1 frequencies */
+  val bandpassF0 = Module(
+    new FixedPointTransposeFIR(
+      FixedPoint(10.W, 0.BP),
+      FixedPoint((10 + 1 + bandpassF0Width).W, bandpassF0BP.BP),
+      FixedPoint(bandpassF0Width.W, bandpassF0BP.BP),
+      FIRCoefficients.GFSKRX_Bandpass_F0.coefficients.length
+    )
+  )
+  bandpassF0.io.coeff := bandpassF0Coeffs
+
+  val bandpassF1Width = FIRCoefficients.GFSKRX_Bandpass_F1_ALT.width
+  val bandpassF1BP = FIRCoefficients.GFSKRX_Bandpass_F1_ALT.binaryPoint
+  val bandpassF1Coeffs = RegInit(VecInit(FIRCoefficients.GFSKRX_Bandpass_F1_ALT.coefficients.map(c => FixedPoint.fromDouble(c, bandpassF1Width.W, bandpassF1BP.BP))))
+
+  val bandpassF1 = Module(
+    new FixedPointTransposeFIR(
+      FixedPoint(10.W, 0.BP),
+      FixedPoint((10 + 1 + bandpassF1Width).W, bandpassF1BP.BP),
+      FixedPoint(bandpassF1Width.W, bandpassF1BP.BP),
+      FIRCoefficients.GFSKRX_Bandpass_F1_ALT.coefficients.length
+    )
+  )
+  bandpassF1.io.coeff := bandpassF1Coeffs
 
   imageRejection.io.out.ready := bandpassF0.io.in.ready && bandpassF1.io.in.ready
 
-  bandpassF0.io.in.bits.data := imageRejection.io.out.bits.asSInt().asFixedPoint(0.BP)
+  bandpassF0.io.in.bits := imageRejection.io.out.bits.asSInt().asFixedPoint(0.BP)
   bandpassF0.io.in.valid := imageRejection.io.out.valid
 
-  bandpassF1.io.in.bits.data := imageRejection.io.out.bits.asSInt().asFixedPoint(0.BP)
+  bandpassF1.io.in.bits := imageRejection.io.out.bits.asSInt().asFixedPoint(0.BP)
   bandpassF1.io.in.valid := imageRejection.io.out.valid
 
-  val envelopeDetectorF0 = Module( new EnvelopeDetector(12) )
-  val envelopeDetectorF1 = Module( new EnvelopeDetector(12) )
+  val envelopeDetectorWidth = FIRCoefficients.GFSKRX_Envelope_Detector.width
+  val envelopeDetectorBP = FIRCoefficients.GFSKRX_Envelope_Detector.binaryPoint
+  val envelopeDetectorCoeffs = RegInit(VecInit(FIRCoefficients.GFSKRX_Envelope_Detector.coefficients.map(c => FixedPoint.fromDouble(c, envelopeDetectorWidth.W, envelopeDetectorBP.BP))))
+
+  /* Envelope Detectors. */
+  val envelopeDetectorF0 = Module( new EnvelopeDetector(bandpassF0.io.out.bits.getWidth - bandpassF0.io.out.bits.binaryPoint.get) )
+  val envelopeDetectorF1 = Module( new EnvelopeDetector(bandpassF1.io.out.bits.getWidth - bandpassF1.io.out.bits.binaryPoint.get) )
 
   envelopeDetectorF0.io.in.valid := bandpassF0.io.out.valid
-  envelopeDetectorF0.io.in.bits := Utility.roundTowardsZero(bandpassF0.io.out.bits.data)
+  envelopeDetectorF0.io.in.bits := Utility.roundTowardsZero(bandpassF0.io.out.bits)
   bandpassF0.io.out.ready := envelopeDetectorF0.io.in.ready
+  envelopeDetectorF0.io.coeffs := envelopeDetectorCoeffs
 
   envelopeDetectorF1.io.in.valid := bandpassF1.io.out.valid
-  envelopeDetectorF1.io.in.bits := Utility.roundTowardsZero(bandpassF1.io.out.bits.data)
+  envelopeDetectorF1.io.in.bits := Utility.roundTowardsZero(bandpassF1.io.out.bits)
   bandpassF1.io.out.ready := envelopeDetectorF1.io.in.ready
+  envelopeDetectorF1.io.coeffs := envelopeDetectorCoeffs
 
   envelopeDetectorF0.io.out.ready := io.digital.outF0.ready
   envelopeDetectorF1.io.out.ready := io.digital.outF1.ready

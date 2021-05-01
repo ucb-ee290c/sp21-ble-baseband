@@ -9,7 +9,7 @@ class PreambleDetector extends Module {
     val control = Input(new Bundle {
       val firstBit = UInt(1.W)
       val reset = Input(Bool())
-      val threshold = UInt(8.W) // TODO, parameterize this
+      val threshold = UInt(8.W)
     })
     val detected = Output(Bool())
   })

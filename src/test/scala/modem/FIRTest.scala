@@ -17,9 +17,9 @@ class FIRTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "Test A Transpose FIR" in {
 
-    test(new FixedPointTransposeFIR(FixedPoint(4.W, 0.BP), FixedPoint(6.W, 0.BP), testWeights)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
+    test(new FixedPointTransposeFIR(FixedPoint(4.W, 0.BP), FixedPoint(6.W, 0.BP), FixedPoint(4.W, 0.BP), testInputs.length)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       c.io.out.ready.poke(true.B)
-
+      c.io.coeff.poke(VecInit(testInputs))
       c.clock.step()
 
       val inDriver = new DecoupledDriverMaster(c.clock, c.io.in)
