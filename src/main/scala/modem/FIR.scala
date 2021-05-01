@@ -8,11 +8,12 @@ import dsptools.numbers._
 import chisel3.experimental.FixedPoint
 
 object FIRCodes {
-  val RX_HILBERT_FILTER = 0.U
-  val RX_BANDPASS_F0 = 1.U
-  val RX_BANDPASS_F1 = 2.U
-  val RX_ENVELOPE = 3.U
-  val TX_GAUSSIAN = 4.U
+  val NONE = 0.U
+  val RX_HILBERT_FILTER = 1.U
+  val RX_BANDPASS_F0 = 2.U
+  val RX_BANDPASS_F1 = 3.U
+  val RX_ENVELOPE = 4.U
+  val TX_GAUSSIAN = 5.U
 }
 
 class FIRCoefficientChangeCommand extends Bundle {

@@ -43,6 +43,10 @@ class DemodulationTestModule(params: BLEBasebandModemParams) extends Module {
   imageRejection.io.control.IonTop := 0.B
   io.analog.i.ready := imageRejection.io.in.i.ready
   io.analog.q.ready := imageRejection.io.in.q.ready
+  imageRejection.io.filterCoeffCommand.valid := 0.B
+  imageRejection.io.filterCoeffCommand.bits.FIR := 0.U
+  imageRejection.io.filterCoeffCommand.bits.change.coeff := 0.U
+  imageRejection.io.filterCoeffCommand.bits.change.value := 0.U
 
 
   val bandpassF0Width = FIRCoefficients.GFSKRX_Bandpass_F0.width

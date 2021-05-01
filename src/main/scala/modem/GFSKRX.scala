@@ -81,8 +81,15 @@ class GFSKRX(params: BLEBasebandModemParams) extends Module {
 
   /* Preamble Detection */
   val preambleDetector = Module(new PreambleDetector())
-  val preambleDetected = RegInit(0.B) // TODO: Reset these when needed.
+  val preambleDetected = RegInit(0.B)
   val preambleValid = RegInit(0.B)
+
+  /* Reset the preamble detector when the modem enters RX */
+  when (Utility.risingedge(io.control.in.enable)) {
+    preambleDetected := 0.B
+    preambleValid := 0.B
+  }
+
   preambleDetector.io.control.firstBit := io.control.in.accessAddressLSB
   preambleDetector.io.in := guess
   preambleDetector.io.control.threshold := io.control.in.preambleDetectionThreshold

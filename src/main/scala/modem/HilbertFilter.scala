@@ -62,13 +62,12 @@ class HilbertFilter(params: BLEBasebandModemParams) extends Module {
   fir.io.out.ready := io.out.ready
 
   io.out.valid := fir.io.out.valid & I_valid_delayed
-  // Depending on the control operation, either subtract the output of the FIR filter, or add it to I
-  // TODO: Is this okay?
 
+  // Depending on the control operation, either subtract the output of the FIR filter, or add it to I
   io.out.bits := Mux(!io.control.IonLHS,
     Mux(io.control.operation,
-    I_delayed +& Utility.roundTowardsZero(fir.io.out.bits),
-    I_delayed -& Utility.roundTowardsZero(fir.io.out.bits)),
+      I_delayed +& Utility.roundTowardsZero(fir.io.out.bits),
+      I_delayed -& Utility.roundTowardsZero(fir.io.out.bits)),
     Mux(io.control.operation,
       Utility.roundTowardsZero(fir.io.out.bits) +& I_delayed,
       Utility.roundTowardsZero(fir.io.out.bits) -& I_delayed)
