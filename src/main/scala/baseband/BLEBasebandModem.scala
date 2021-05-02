@@ -447,6 +447,8 @@ class BLEBasebandModemImp(params: BLEBasebandModemParams, beatBytes: Int, outer:
   io.tuning.enable.rx.i := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.i, bmc.io.analog.enable.rx)
   io.tuning.enable.rx.q := Mux(basebandFrontend.io.tuningControl.debug.enabled, basebandFrontend.io.tuning.enable.rx.q, bmc.io.analog.enable.rx)
 
+  io.tuning.mux := basebandFrontend.io.tuning.mux
+
   io.data.pllD := bmc.io.analog.data.pllD
   io.data.loCT := bmc.io.analog.data.loCT
   io.data.tx.loFSK := bmc.io.analog.data.tx.loFSK
