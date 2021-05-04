@@ -43,7 +43,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
   val tests = 1
   val params = BLEBasebandModemParams()
   val beatBytes = 4
-
+/*
   it should "Pass a full baseband loop without whitening" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -339,13 +339,14 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       }
     }
   }
-
+*/
   it should "Properly receive data with random channel index" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
       val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
-
+      val errorOutDriver = new DecoupledDriverSlave(c.clock, c.io.messages.rxFinishMessage)
+      val errorOutMonitor = new DecoupledMonitor(c.clock, c.io.messages.rxFinishMessage)
       // Set the appropriate tuning parameters
       c.io.tuning.control.imageRejectionControl.poke(0.U)
       c.io.tuning.control.preambleDetectionThreshold.poke(140.U)
@@ -353,6 +354,11 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.firCmd.bits.FIR.poke(0.U)
       c.io.firCmd.bits.change.coeff.poke(0.U)
       c.io.firCmd.bits.change.value.poke(0.U)
+      val tests = 5
+      var expectedBits = Seq[BigInt]()
+      var outputBits = Seq[BigInt]()
+      var outputLength = 0
+      var inputLength = 0
       for (i <- 0 until tests) {
         val channelIndex = 0
         val accessAddress = scala.util.Random.nextInt.abs
@@ -389,139 +395,42 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
             _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
         ))
         c.clock.step()
-        val length = 50
+        val length = Random.nextInt(10)
         val (packet, pdu) = TestUtility.packet(accessAddress, length)
         val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
         val input = TestUtility.testWaveform(bits)
-
+        inputLength = inputLength + length
+        expectedBits = expectedBits ++ pdu.map{BigInt(_)}
         for (s <- input) {
           c.io.analog.data.rx.i.data.poke(s._1.U(8.W))
           c.io.analog.data.rx.q.data.poke(s._2.U(8.W))
           c.clock.step()
         }
-
-        val expectedBaseAddr = (addrInString.U.litValue + (length + 2) + beatBytes) & ~(beatBytes - 1)
-        var outputBits = Seq[BigInt]()
-        var outputLength = 0
-        dmaWriteReqMonitor.monitoredTransactions
-          .map(t => t.data)
-          .foreach { o =>
-              //assert(o.addr.litValue == expectedBaseAddr + outputLength)
-            // TODO: MAKE SURE THE ADDRESSES MATCH
-              outputLength = outputLength + o.totalBytes.litValue.toInt
-              outputBits = outputBits ++ Seq.tabulate(o.totalBytes.litValue.toInt * 8) {i => (o.data.litValue >> i) & 0x1}
-          }
-        println("Expected: ", pdu)
-        println("Recieved: ", outputBits)
-        assert(length + 2 == outputLength)
-        assert(pdu == outputBits)
-      }
-    }
-  }
-
-  it should "Recieve two packets after re-entering RX" in {
-    test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
-      val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
-      val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
-      val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
-
-      // Set the appropriate tuning parameters
-      c.io.tuning.control.imageRejectionControl.poke(0.U)
-      c.io.tuning.control.preambleDetectionThreshold.poke(140.U)
-      c.io.firCmd.valid.poke(0.B)
-      c.io.firCmd.bits.FIR.poke(0.U)
-      c.io.firCmd.bits.change.coeff.poke(0.U)
-      c.io.firCmd.bits.change.value.poke(0.U)
-      for (i <- 0 until tests) {
-        val channelIndex = 0
-        val accessAddress = scala.util.Random.nextInt.abs
-        val crcSeed = s"x555555"
-
-        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
-            _.inst.secondaryInst -> BasebandISA.CONFIG_CHANNEL_INDEX,
-            _.additionalData -> channelIndex.U)
-        ))
-        c.clock.step()
-
-        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
-            _.inst.secondaryInst -> BasebandISA.CONFIG_ACCESS_ADDRESS,
-            _.additionalData -> accessAddress.U(32.W))
-        ))
-        c.clock.step()
-
-        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.CONFIG_CMD,
-            _.inst.secondaryInst -> BasebandISA.CONFIG_CRC_SEED,
-            _.additionalData -> crcSeed.U)
-        ))
-        c.clock.step()
-
-        val addrInString = s"x${scala.util.Random.nextInt(1600)}0"
-        val addrInString2 = s"x${scala.util.Random.nextInt(1600)}0"
-
-        println(s"Test: \t addr 0${addrInString}, addr2 0${addrInString2}")
-
-        // Push a debug command with post assembler loopback
-        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.RECEIVE_START_CMD,
-            _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
-        ))
-        c.clock.step()
-        val length = 50
-        val (packet, pdu) = TestUtility.packet(accessAddress, length)
-        val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
-        var input = TestUtility.testWaveform(bits)
-
-        for (s <- input) {
-          c.io.analog.data.rx.i.data.poke(s._1.U(8.W))
-          c.io.analog.data.rx.q.data.poke(s._2.U(8.W))
-          c.clock.step()
-        }
-
         cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
           new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.RECEIVE_EXIT_CMD,
             _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
         ))
-
-        c.clock.step()
-        val (packet2, pdu2) = TestUtility.packet(accessAddress, length)
-        val bits2 = Seq.tabulate(50){_ => 0} ++ packet ++ Seq.tabulate(10){_ => 0}
-        input = TestUtility.testWaveform(bits2)
-
-        c.clock.step(50)
-
-        cmdInDriver.push(new DecoupledTX(new BLEBasebandModemCommand()).tx(
-          new BLEBasebandModemCommand().Lit(_.inst.primaryInst -> BasebandISA.RECEIVE_START_CMD,
-            _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString2.U)
-        ))
-
-        for (s <- input) {
-          c.io.analog.data.rx.i.data.poke(s._1.U(8.W))
-          c.io.analog.data.rx.q.data.poke(s._2.U(8.W))
-          c.clock.step()
-        }
+        c.clock.step(10)
 
         val expectedBaseAddr = (addrInString.U.litValue + (length + 2) + beatBytes) & ~(beatBytes - 1)
-        var outputBits = Seq[BigInt]()
-        var outputLength = 0
-        dmaWriteReqMonitor.monitoredTransactions
-          .map(t => t.data)
-          .foreach { o =>
-            print("ADDRESS: ",o.addr.litValue)
-            // TODO: MAKE SURE THE ADDRESSES MATCH
-            outputLength = outputLength + o.totalBytes.litValue.toInt
-            outputBits = outputBits ++ Seq.tabulate(o.totalBytes.litValue.toInt * 8) {i => (o.data.litValue >> i) & 0x1}
-          }
+
+
         println("Expected: ", pdu)
-        println("Recieved: ", outputBits)
-        assert(length + 2 == outputLength)
-        assert(pdu == outputBits)
       }
+      dmaWriteReqMonitor.monitoredTransactions
+        .map(t => t.data)
+        .foreach { o =>
+          //assert(o.addr.litValue == expectedBaseAddr + outputLength)
+          // TODO: MAKE SURE THE ADDRESSES MATCH
+          outputLength = outputLength + o.totalBytes.litValue.toInt
+          outputBits = outputBits ++ Seq.tabulate(o.totalBytes.litValue.toInt * 8) {i => (o.data.litValue >> i) & 0x1}
+        }
+      print("Recieved: ", outputBits)
+      assert(inputLength + 2 * tests == outputLength)
+      assert(expectedBits == outputBits)
     }
   }
-
+/*
   it should "Exit RX Mode without complications" in {
     test(new BMC(params, beatBytes)).withAnnotations(Seq(TreadleBackendAnnotation, WriteVcdAnnotation)) { c =>
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
@@ -592,5 +501,5 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
 
       }
     }
-  }
+  }*/
 }
