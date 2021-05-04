@@ -354,7 +354,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       c.io.firCmd.bits.FIR.poke(0.U)
       c.io.firCmd.bits.change.coeff.poke(0.U)
       c.io.firCmd.bits.change.value.poke(0.U)
-      val tests = 5
+      val tests = 1
       var expectedBits = Seq[BigInt]()
       var outputBits = Seq[BigInt]()
       var outputLength = 0
@@ -395,7 +395,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
             _.inst.secondaryInst -> 0.U, _.inst.data -> 0.U, _.additionalData -> addrInString.U)
         ))
         c.clock.step()
-        val length = Random.nextInt(10)
+        val length = 20
         val (packet, pdu) = TestUtility.packet(accessAddress, length)
         val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq.tabulate(10){_ => 0}
         val input = TestUtility.testWaveform(bits)

@@ -10,30 +10,36 @@ class CDRDCO extends Module {
       val inc = Bool()
       val dec = Bool()
     })
-    val out = Output(new Bundle() {
+    val out = Output(new Bundle {
       val clk = Bool()
     })
   })
-  val willInc = RegInit(0.B)
-  val willDec = RegInit(0.B)
+  val s_idle :: s_waiting :: s_moving :: Nil = Enum(3)
+  val incState = RegInit(s_idle)
+  val decState = RegInit(s_idle)
+  val willInc = incState === s_moving
+  val willDec = decState === s_moving
 
   val toggleFF = Wire(Bool())
-  val shouldToggle = !(willInc & !toggleFF | willDec & toggleFF)
-  toggleFF := RegEnable(!toggleFF, 0.B, shouldToggle)
+  toggleFF := RegNext(!toggleFF, 0.B)
 
-  when (Utility.risingedge(io.in.inc)) {
-    willInc := 1.B
-  }.elsewhen(Counter(0 until 2, !toggleFF, Utility.risingedge(io.in.inc))._2) {
-    willInc := 0.B
+  when(incState === s_idle && Utility.risingedge(io.in.inc)) {
+    incState := s_waiting
+  }.elsewhen(incState === s_waiting && !toggleFF) {
+    incState := s_moving
+  }.elsewhen(incState === s_moving && Counter(0 until 2, !toggleFF, Utility.risingedge(io.in.inc))._2) {
+    incState := s_idle
   }
 
-  when (Utility.risingedge(io.in.dec)) {
-    willDec := 1.B
-  }.elsewhen(Counter(0 until 2, toggleFF, Utility.risingedge(io.in.dec))._2) {
-    willDec := 0.B
+  when(decState === s_idle && Utility.risingedge(io.in.dec)) {
+    decState := s_waiting
+  }.elsewhen(decState === s_waiting && toggleFF) {
+    decState := s_moving
+  }.elsewhen(decState === s_moving && Counter(0 until 2, toggleFF, Utility.risingedge(io.in.dec))._2) {
+    decState := s_idle
   }
 
-  io.out.clk := !toggleFF & !clock.asBool()
+  io.out.clk := (!toggleFF || willInc) && !willDec
     //RegEnable(!io.out.clk, risingedge(Counter(!toggleFF & !clock.asBool(), 5)._2))
 
 }
@@ -48,7 +54,9 @@ class FPSCDR extends Module {
 
   val dco = Module(new CDRDCO).io
 
-  io.clk := RegEnable(!io.clk, 1.B, Utility.risingedge(Counter(dco.out.clk, 5)._2))
+  val count = Wire(UInt(4.W))
+  count := RegEnable(Mux(count === 4.U, 0.U, count + 1.U), 0.U(4.W), dco.out.clk)
+  io.clk := RegEnable(!io.clk, 1.B, count === 4.U && dco.out.clk)
 
   when (Utility.risingedge(io.clk)) {
     when (state === s_idle) {
