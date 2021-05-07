@@ -217,7 +217,9 @@ class GFSKModem(params: BLEBasebandModemParams) extends Module {
   rx.io.control <> io.control.rx
   rx.io.filterCoeffCommand := io.filterCoeffCommand
 
-  val rxQueue = Queue(rx.io.digital.out, params.modemQueueDepth)
+  val rxQueue = withReset(reset.asBool() || !rx.io.control.in.enable) {
+    Queue(rx.io.digital.out, params.modemQueueDepth)
+  }
   io.digital.rx <> rxQueue
 
   /* TODO: Does the ADC Latch the data? */

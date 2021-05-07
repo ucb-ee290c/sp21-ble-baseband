@@ -139,11 +139,11 @@ class GFSKRXTest extends AnyFlatSpec with ChiselScalatestTester {
       val outMonitor = new DecoupledMonitor(c.clock, c.io.digital.out)
       val accessAddress = scala.util.Random.nextInt.abs
 
-      val numberOfBytes = 50
+      val numberOfBytes = 10
       val packet = TestUtility.packet(accessAddress, numberOfBytes)._1
       val bits = Seq(0,0,0,0,0,0) ++ packet ++ Seq(0,0,0,0,0,0,0)
       val input = TestUtility.testWaveform(bits, imageAmplitude = 1)
-      val initialPhaseOffset = Random.nextInt(20)
+      val initialPhaseOffset = 10//Random.nextInt(20)
       c.io.control.aaLSB.poke((accessAddress & 0x1).U)
       c.clock.step(initialPhaseOffset) // random phase offset
       inDriverI.push(input.map(p => new DecoupledTX(UInt(8.W)).tx(p._1.U(8.W))))
