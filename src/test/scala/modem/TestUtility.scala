@@ -214,4 +214,26 @@ object TestUtility {
     val pdu = header ++ Seq.tabulate(pduLength * 8){_ => Random.nextInt(2)}
     (preamble ++ accessAddress ++ whiten(pdu ++ crc(pdu), 0), pdu)
   }
+
+  def vgaGain(code: Int): Double = {
+    code match {
+      case 0 => 1.296537253799
+      case 1 => 2.0753435518561
+      case 2 => 3.1134005657774
+      case 3 => 4.6163635154047
+      case 4 => 7.3815913723952
+      case 5 => 10.036909309201
+      case 6 => 10.036909309201
+      case 7 => 20.206914319923
+      case 8 => 23.131297805639
+      case 9 => 37.025420540014
+      case 10 => 55.545643184739
+      case 11 => 82.356901715361
+      case 12 => 131.68915167332
+      case 13 => 179.08120170201
+      case 14 => 227.79804889567
+      case 15 => 360.57864302164
+      case _ => 0
+    }
+  }
 }

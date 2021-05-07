@@ -40,7 +40,7 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
     (out, lengths)
   }
 
-  val tests = 1
+  val tests = 2
   val params = BLEBasebandModemParams()
   val beatBytes = 4
 
@@ -527,6 +527,8 @@ class BMCTest extends AnyFlatSpec with ChiselScalatestTester {
       val cmdInDriver = new DecoupledDriverMaster(c.clock, c.io.cmd)
       val dmaWriteReqDriver = new DecoupledDriverSlave(c.clock, c.io.dma.writeReq, 0)
       val dmaWriteReqMonitor = new DecoupledMonitor(c.clock, c.io.dma.writeReq)
+      val errorOutDriver = new DecoupledDriverSlave(c.clock, c.io.messages.rxFinishMessage)
+      val errorOutMonitor = new DecoupledMonitor(c.clock, c.io.messages.rxFinishMessage)
 
       // Set the appropriate tuning parameters
       c.io.tuning.control.imageRejectionControl.poke(0.U)
